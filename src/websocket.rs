@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use futures_util::{SinkExt, StreamExt};
 use tokio;
+use tokio::sync::Mutex as TMutex;
 use tokio_tungstenite;
 
 use blimp_ground_ws_interface;
@@ -20,15 +23,11 @@ pub async fn handle_ground_ws_connection(
         );
 
         let mut use_postcard: Option<bool> = None;
-        let curr_interest = std::sync::Arc::new(tokio::sync::Mutex::new(
-            blimp_ground_ws_interface::VizInterest::new(),
-        ));
+        let curr_interest = Arc::new(TMutex::new(blimp_ground_ws_interface::VizInterest::new()));
 
         async fn handle_message_v2g(
             msg: blimp_ground_ws_interface::MessageV2G,
-            curr_interest: std::sync::Arc<
-                tokio::sync::Mutex<blimp_ground_ws_interface::VizInterest>,
-            >,
+            curr_interest: Arc<TMutex<blimp_ground_ws_interface::VizInterest>>,
             blimp_send_msg_tx: tokio::sync::mpsc::Sender<
                 blimp_onboard_software::obsw_algo::MessageG2B,
             >,

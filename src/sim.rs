@@ -1,3 +1,7 @@
+use std::sync::Arc;
+
+use tokio::sync::Mutex as TMutex;
+
 use blimp_onboard_software::obsw_interface::BlimpAlgorithm;
 
 struct SimBlimp {
@@ -55,8 +59,7 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
     let (sensors_tx, mut sensors_rx) =
         tokio::sync::broadcast::channel::<(blimp_onboard_software::obsw_algo::SensorType, f64)>(64);
 
-    let mut sim: std::sync::Arc<tokio::sync::Mutex<Simulation>> =
-        std::sync::Arc::new(tokio::sync::Mutex::new(Simulation::new()));
+    let mut sim: Arc<TMutex<Simulation>> = Arc::new(TMutex::new(Simulation::new()));
 
     let blimp_action_callback = {
         let sim = sim.clone();

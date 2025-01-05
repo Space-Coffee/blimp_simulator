@@ -1,12 +1,15 @@
 mod sim;
 mod websocket;
 
+use std::sync::Arc;
+
 use fixed;
 use futures_util::{SinkExt, StreamExt};
 use nalgebra;
 use postcard;
 use simba;
 use tokio;
+use tokio::sync::Mutex as TMutex;
 use tokio_tungstenite;
 use typenum;
 
@@ -16,9 +19,8 @@ use blimp_onboard_software::obsw_interface::BlimpAlgorithm;
 
 #[tokio::main]
 async fn main() {
-    let mut ws_conns: std::sync::Arc<
-        tokio::sync::Mutex<std::collections::BTreeMap<u32, tokio::sync::mpsc::Sender<()>>>,
-    > = std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::BTreeMap::new()));
+    let mut ws_conns: Arc<TMutex<std::collections::BTreeMap<u32, tokio::sync::mpsc::Sender<()>>>> =
+        Arc::new(TMutex::new(std::collections::BTreeMap::new()));
 
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::broadcast::channel::<()>(1);
 
