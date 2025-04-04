@@ -19,7 +19,7 @@ use blimp_onboard_software::obsw_interface::BlimpAlgorithm;
 
 #[tokio::main]
 async fn main() {
-    let mut ws_conns: Arc<TMutex<std::collections::BTreeMap<u32, tokio::sync::mpsc::Sender<()>>>> =
+    let ws_conns: Arc<TMutex<std::collections::BTreeMap<u32, tokio::sync::mpsc::Sender<()>>>> =
         Arc::new(TMutex::new(std::collections::BTreeMap::new()));
 
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::broadcast::channel::<()>(1);
