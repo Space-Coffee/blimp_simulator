@@ -137,7 +137,8 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
         .main_algo
         .write()
         .await
-        .set_action_callback(blimp_action_callback);
+        .set_action_callback(blimp_action_callback)
+        .await;
 
     {
         // Execute blimp's algorithm steps
