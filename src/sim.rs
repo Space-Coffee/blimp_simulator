@@ -92,7 +92,7 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                                 // let sim_locked=sim.blocking_lock();
                                 let main_algo_locked = sim_locked.blimp.main_algo.read().await;
                                 // let main_algo_locked=sim_locked.blimp.main_algo.blocking_lock();
-                                // main_algo_locked.handle_event(blimp_onboard_software::obsw_algo::BlimpEvent::GetMsg(postcard::to_stdvec::<blimp_onboard_software::obsw_algo::MessageG2B>(&blimp_onboard_software::obsw_algo::MessageG2B::Pong(ping_id)).unwrap())).await;
+                                main_algo_locked.handle_event(blimp_onboard_software::obsw_algo::BlimpEvent::GetMsg(postcard::to_stdvec::<blimp_onboard_software::obsw_algo::MessageG2B>(&blimp_onboard_software::obsw_algo::MessageG2B::Pong(ping_id)).unwrap())).await;
                             }
                             blimp_onboard_software::obsw_algo::MessageB2G::Pong(ping_id) => {}
                             blimp_onboard_software::obsw_algo::MessageB2G::ForwardAction(
