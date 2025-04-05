@@ -1,12 +1,13 @@
-use std::sync::Arc;
+use std::{future::Future, pin::Pin, sync::Arc};
 
-use tokio::sync::Mutex as TMutex;
+use tokio::sync::{Mutex as TMutex, RwLock as TRwLock};
 
-use blimp_onboard_software::obsw_interface::BlimpAlgorithm;
+use blimp_onboard_software::{obsw_algo::BlimpAction, obsw_interface::BlimpAlgorithm};
 
 struct SimBlimp {
-    coord_mat: nalgebra::Affine3<f64>,
-    main_algo: blimp_onboard_software::obsw_algo::BlimpMainAlgo,
+    // This thing is not Send nor Sync. Why?!!
+    // coord_mat: nalgebra::Affine3<f64>,
+    main_algo: TRwLock<blimp_onboard_software::obsw_algo::BlimpMainAlgo>,
 }
 
 struct Simulation {
@@ -14,22 +15,24 @@ struct Simulation {
     earth_radius: f64,
 }
 
+// impl Send for Simulation {}
+
 impl Simulation {
     fn new() -> Self {
-        let mut blimp_main_algo = blimp_onboard_software::obsw_algo::BlimpMainAlgo::new();
+        let blimp_main_algo = blimp_onboard_software::obsw_algo::BlimpMainAlgo::new();
         //blimp_main_algo.set_action_callback();
         //blimp_main_algo.set_action_callback(action_callback);
         Self {
             blimp: SimBlimp {
-                coord_mat: nalgebra::Affine3::identity(),
-                main_algo: blimp_main_algo,
+                // coord_mat: nalgebra::Affine3::identity(),
+                main_algo: TRwLock::new(blimp_main_algo),
             },
             earth_radius: 6371000.0,
         }
     }
 
-    async fn step(&mut self) {
-        self.blimp.main_algo.step().await;
+    async fn step(&self) {
+        self.blimp.main_algo.read().await.step().await;
     }
 }
 
@@ -59,49 +62,53 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
     let (sensors_tx, mut sensors_rx) =
         tokio::sync::broadcast::channel::<(blimp_onboard_software::obsw_algo::SensorType, f64)>(64);
 
-    let mut sim: Arc<TMutex<Simulation>> = Arc::new(TMutex::new(Simulation::new()));
+    let sim: Arc<TMutex<Simulation>> = Arc::new(TMutex::new(Simulation::new()));
 
-    let blimp_action_callback = {
+    let blimp_action_callback: Arc<
+        dyn Fn(BlimpAction) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
+    > = {
         let sim = sim.clone();
         let motors_tx = motors_tx.clone();
-        let blimp_action_callback = Box::new(move |action| {
-            // println!("Action {:#?}", action);
-            match action {
-                blimp_onboard_software::obsw_algo::BlimpAction::SendMsg(msg) => {
-                    if let Ok(msg_des) =
-                        postcard::from_bytes::<blimp_onboard_software::obsw_algo::MessageB2G>(&msg)
-                    {
-                        //println!("Got message:\n{:#?}", msg_des);
+        let servos_tx = servos_tx.clone();
+        let sensors_tx = sensors_tx.clone();
+        Arc::new(move |action| {
+            let sim = sim.clone();
+            let motors_tx = motors_tx.clone();
+            let servos_tx = servos_tx.clone();
+            let sensors_tx = sensors_tx.clone();
+            Box::pin(async move {
+                // println!("Action {:#?}", action);
+                match action {
+                    BlimpAction::SendMsg(msg) => {
+                        if let Ok(msg_des) = postcard::from_bytes::<
+                            blimp_onboard_software::obsw_algo::MessageB2G,
+                        >(&msg)
+                        {
+                            //println!("Got message:\n{:#?}", msg_des);
 
-                        match msg_des {
+                            match msg_des {
                             blimp_onboard_software::obsw_algo::MessageB2G::Ping(ping_id) => {
-                                let sim = sim.clone();
-                                tokio::spawn(async move {
-                                    sim.blocking_lock().blimp.main_algo.handle_event(
-                                        &blimp_onboard_software::obsw_algo::BlimpEvent::GetMsg(
-                                            postcard::to_stdvec::<
-                                                blimp_onboard_software::obsw_algo::MessageG2B,
-                                            >(
-                                                &blimp_onboard_software::obsw_algo::MessageG2B::Pong(
-                                                    ping_id,
-                                                ),
-                                            )
-                                            .unwrap(),
-                                        ),
-                                    ).await;
-                                });
+                                let sim_locked = sim.lock().await;
+                                // let sim_locked=sim.blocking_lock();
+                                let main_algo_locked = sim_locked.blimp.main_algo.read().await;
+                                // let main_algo_locked=sim_locked.blimp.main_algo.blocking_lock();
+                                let msg_serialized = postcard::to_stdvec::<blimp_onboard_software::obsw_algo::MessageG2B>(
+                                    &blimp_onboard_software::obsw_algo::MessageG2B::Pong(ping_id))
+                                    .unwrap();
+                                main_algo_locked.handle_event(
+                                    blimp_onboard_software::obsw_algo::BlimpEvent::GetMsg(msg_serialized)).await;
                             }
                             blimp_onboard_software::obsw_algo::MessageB2G::Pong(ping_id) => {}
                             blimp_onboard_software::obsw_algo::MessageB2G::ForwardAction(
                                 fwd_action,
                             ) => match fwd_action {
-                                blimp_onboard_software::obsw_algo::BlimpAction::SetMotor {
+                                BlimpAction::SetMotor {
                                     motor,
                                     speed,
                                 } => {
                                     motors_tx.send((motor, speed)).unwrap();
                                 }
-                                blimp_onboard_software::obsw_algo::BlimpAction::SetServo {
+                                BlimpAction::SetServo {
                                     servo,
                                     location,
                                 } => {
@@ -121,18 +128,21 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                                 _ => {}
                             },
                         }
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
-            }
-        });
-        blimp_action_callback
+            })
+        })
     };
     sim.lock()
         .await
         .blimp
         .main_algo
-        .set_action_callback(blimp_action_callback);
+        .write()
+        .await
+        .set_action_callback(blimp_action_callback)
+        .await;
 
     {
         // Execute blimp's algorithm steps
@@ -169,7 +179,9 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                             .await
                             .blimp
                             .main_algo
-                            .handle_event(&blimp_onboard_software::obsw_algo::BlimpEvent::GetMsg(
+                            .read()
+                            .await
+                            .handle_event(blimp_onboard_software::obsw_algo::BlimpEvent::GetMsg(
                                 postcard::to_stdvec::<blimp_onboard_software::obsw_algo::MessageG2B>(
                                     &msg,
                                 )
@@ -227,8 +239,10 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                     .await
                     .blimp
                     .main_algo
+                    .read()
+                    .await
                     .handle_event(
-                        &blimp_onboard_software::obsw_algo::BlimpEvent::SensorDataF64(
+                        blimp_onboard_software::obsw_algo::BlimpEvent::SensorDataF64(
                             blimp_onboard_software::obsw_algo::SensorType::Barometer,
                             (counter as f64 * 0.1).sin() * 2000.0 + 101300.0,
                         ),
