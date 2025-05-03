@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
@@ -6,146 +7,144 @@ use tokio::sync::Mutex as TMutex;
 use tokio_tungstenite;
 
 use blimp_ground_ws_interface;
+use blimp_ground_ws_interface::BlimpGroundWebsocketStreamPair;
 
-pub async fn handle_ground_ws_connection(
-    stream: tokio::net::TcpStream,
+pub fn handle_ground_ws_connection(
     mut sim_channels: crate::sim::SimChannels,
-) {
-    println!("Accepting new WebSocket connection...");
-    if let Ok(mut ws_stream) = tokio_tungstenite::accept_async(stream).await {
-        println!(
-            "New WebSocket connection with {}",
-            ws_stream
-                .get_ref()
-                .peer_addr()
-                .and_then(|x| Ok(format!("{}", x)))
-                .unwrap_or("unknown".to_string())
-        );
+) -> impl Fn(BlimpGroundWebsocketStreamPair<tokio::net::TcpStream>) -> Box<dyn Future<Output = ()>>
+{
+    move |stream_pair: BlimpGroundWebsocketStreamPair<tokio::net::TcpStream>| {
+        Box::new(async move {
+            println!("New WebSocket connection");
 
-        let mut use_postcard: Option<bool> = None;
-        let curr_interest = Arc::new(TMutex::new(blimp_ground_ws_interface::VizInterest::new()));
+            let mut use_postcard: Option<bool> = None;
+            let curr_interest =
+                Arc::new(TMutex::new(blimp_ground_ws_interface::VizInterest::new()));
 
-        async fn handle_message_v2g(
-            msg: blimp_ground_ws_interface::MessageV2G,
-            curr_interest: Arc<TMutex<blimp_ground_ws_interface::VizInterest>>,
-            blimp_send_msg_tx: tokio::sync::mpsc::Sender<
-                blimp_onboard_software::obsw_algo::MessageG2B,
-            >,
-        ) {
-            //println!("Got V2G message:\n{:#?}", &msg);
-            match msg {
-                blimp_ground_ws_interface::MessageV2G::DeclareInterest(interest) => {
-                    *(curr_interest.lock().await) = interest;
-                }
-                blimp_ground_ws_interface::MessageV2G::Controls(
-                    blimp_ground_ws_interface::Controls {
-                        throttle,
-                        elevation,
-                        yaw,
-                    },
-                ) => {
-                    blimp_send_msg_tx
-                        .send(blimp_onboard_software::obsw_algo::MessageG2B::Control(
-                            blimp_onboard_software::obsw_algo::Controls {
-                                throttle,
-                                elevation,
-                                yaw,
-                            },
-                        ))
-                        .await
-                        .unwrap();
+            async fn handle_message_v2g(
+                msg: blimp_ground_ws_interface::MessageV2G,
+                curr_interest: Arc<TMutex<blimp_ground_ws_interface::VizInterest>>,
+                blimp_send_msg_tx: tokio::sync::mpsc::Sender<
+                    blimp_onboard_software::obsw_algo::MessageG2B,
+                >,
+            ) {
+                //println!("Got V2G message:\n{:#?}", &msg);
+                match msg {
+                    blimp_ground_ws_interface::MessageV2G::DeclareInterest(interest) => {
+                        *(curr_interest.lock().await) = interest;
+                    }
+                    blimp_ground_ws_interface::MessageV2G::Controls(
+                        blimp_ground_ws_interface::Controls {
+                            throttle,
+                            elevation,
+                            yaw,
+                        },
+                    ) => {
+                        blimp_send_msg_tx
+                            .send(blimp_onboard_software::obsw_algo::MessageG2B::Control(
+                                blimp_onboard_software::obsw_algo::Controls {
+                                    throttle,
+                                    elevation,
+                                    yaw,
+                                },
+                            ))
+                            .await
+                            .unwrap();
+                    }
                 }
             }
-        }
 
-        async fn send_ws_msg(
-            ws_stream: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
-            use_postcard: bool,
-            msg: blimp_ground_ws_interface::MessageG2V,
-        ) {
-            let msg_ser = if use_postcard {
-                tokio_tungstenite::tungstenite::Message::Binary(postcard::to_stdvec(&msg).unwrap())
-            } else {
-                tokio_tungstenite::tungstenite::Message::Text(serde_json::to_string(&msg).unwrap())
-            };
-            ws_stream.send(msg_ser).await.unwrap();
-        }
+            async fn send_ws_msg(
+                ws_stream: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+                use_postcard: bool,
+                msg: blimp_ground_ws_interface::MessageG2V,
+            ) {
+                let msg_ser = if use_postcard {
+                    tokio_tungstenite::tungstenite::Message::Binary(
+                        postcard::to_stdvec(&msg).unwrap(),
+                    )
+                } else {
+                    tokio_tungstenite::tungstenite::Message::Text(
+                        serde_json::to_string(&msg).unwrap(),
+                    )
+                };
+                ws_stream.send(msg_ser).await.unwrap();
+            }
 
-        'ws_handler_loop: loop {
-            tokio::select! {
-                ws_msg = ws_stream.next() => {
-                    if let Some(ws_msg) = ws_msg {
-                        if let Ok(ws_msg) = ws_msg {
-                            match ws_msg {
-                                tokio_tungstenite::tungstenite::Message::Text(msg_str) => {
-                                    if let None = use_postcard {
-                                        use_postcard = Some(false);
+            'ws_handler_loop: loop {
+                tokio::select! {
+                    ws_msg = ws_stream.next() => {
+                        if let Some(ws_msg) = ws_msg {
+                            if let Ok(ws_msg) = ws_msg {
+                                match ws_msg {
+                                    tokio_tungstenite::tungstenite::Message::Text(msg_str) => {
+                                        if let None = use_postcard {
+                                            use_postcard = Some(false);
+                                        }
+                                        if let Ok(msg) =
+                                            serde_json::from_str::<blimp_ground_ws_interface::MessageV2G>(
+                                                &msg_str,
+                                            ) {
+                                                handle_message_v2g(msg, curr_interest.clone(), sim_channels.msg_tx.clone()).await;
+                                        }
+                                        else {
+                                            eprintln!("Couldn't deserialize JSON message from WebSocket: \"{}\"", msg_str);
+                                        }
                                     }
-                                    if let Ok(msg) =
-                                        serde_json::from_str::<blimp_ground_ws_interface::MessageV2G>(
-                                            &msg_str,
-                                        ) {
+                                    tokio_tungstenite::tungstenite::Message::Binary(msg_bin) => {
+                                        if let None = use_postcard {
+                                            use_postcard = Some(true);
+                                        }
+                                        if let Ok(msg) =
+                                            postcard::from_bytes::<blimp_ground_ws_interface::MessageV2G>(
+                                                &msg_bin,
+                                            ) {
                                             handle_message_v2g(msg, curr_interest.clone(), sim_channels.msg_tx.clone()).await;
+                                        }
+                                        else {
+                                            eprintln!("Couldn't deserialize Postcard message from WebSocket: {:02X?}", msg_bin);
+                                        }
                                     }
-                                    else {
-                                        eprintln!("Couldn't deserialize JSON message from WebSocket: \"{}\"", msg_str);
-                                    }
+                                    _ => {}
                                 }
-                                tokio_tungstenite::tungstenite::Message::Binary(msg_bin) => {
-                                    if let None = use_postcard {
-                                        use_postcard = Some(true);
-                                    }
-                                    if let Ok(msg) =
-                                        postcard::from_bytes::<blimp_ground_ws_interface::MessageV2G>(
-                                            &msg_bin,
-                                        ) {
-                                        handle_message_v2g(msg, curr_interest.clone(), sim_channels.msg_tx.clone()).await;
-                                    }
-                                    else {
-                                        eprintln!("Couldn't deserialize Postcard message from WebSocket: {:02X?}", msg_bin);
-                                    }
-                                }
-                                _ => {}
                             }
                         }
+                        else {
+                            println!(
+                                "WebSocket client {} disconnected",
+                                ws_stream
+                                    .get_ref()
+                                    .peer_addr()
+                                    .and_then(|x| Ok(format!("{}", x)))
+                                    .unwrap_or("unknown".to_string()));
+                            break 'ws_handler_loop;
+                        }
                     }
-                    else {
-                        println!(
-                            "WebSocket client {} disconnected",
-                            ws_stream
-                                .get_ref()
-                                .peer_addr()
-                                .and_then(|x| Ok(format!("{}", x)))
-                                .unwrap_or("unknown".to_string()));
-                        break 'ws_handler_loop;
+                    motors_update = sim_channels.motors_rx.recv() => {
+                        if curr_interest.lock().await.motors.clone() {
+                            let motors_update = motors_update.unwrap();
+                            send_ws_msg(
+                                &mut ws_stream,
+                                use_postcard.unwrap_or(true),
+                                blimp_ground_ws_interface::MessageG2V::MotorSpeed{id: motors_update.0, speed: motors_update.1}
+                            ).await;
+                        }
                     }
-                }
-                motors_update = sim_channels.motors_rx.recv() => {
-                    if curr_interest.lock().await.motors.clone() {
-                        let motors_update = motors_update.unwrap();
-                        send_ws_msg(
-                            &mut ws_stream,
-                            use_postcard.unwrap_or(true),
-                            blimp_ground_ws_interface::MessageG2V::MotorSpeed{id: motors_update.0, speed: motors_update.1}
-                        ).await;
+                    servos_update = sim_channels.servos_rx.recv() => {
+                        if curr_interest.lock().await.servos {
+                            let servos_update = servos_update.unwrap();
+                            send_ws_msg(&mut ws_stream, use_postcard.unwrap_or(true), blimp_ground_ws_interface::MessageG2V::ServoPosition{id: servos_update.0, angle:servos_update.1}).await;
+                        }
                     }
-                }
-                servos_update = sim_channels.servos_rx.recv() => {
-                    if curr_interest.lock().await.servos {
-                        let servos_update = servos_update.unwrap();
-                        send_ws_msg(&mut ws_stream, use_postcard.unwrap_or(true), blimp_ground_ws_interface::MessageG2V::ServoPosition{id: servos_update.0, angle:servos_update.1}).await;
-                    }
-                }
-                sensors_update = sim_channels.sensors_rx.recv() => {
-                    if curr_interest.lock().await.sensors {
-                        let sensors_update = sensors_update.unwrap();
-                        send_ws_msg(&mut ws_stream, use_postcard.unwrap_or(true), blimp_ground_ws_interface::MessageG2V::SensorData{id: serde_json::to_string::<blimp_onboard_software::obsw_algo::SensorType>(&sensors_update.0).unwrap(), data: sensors_update.1}).await;
+                    sensors_update = sim_channels.sensors_rx.recv() => {
+                        if curr_interest.lock().await.sensors {
+                            let sensors_update = sensors_update.unwrap();
+                            send_ws_msg(&mut ws_stream, use_postcard.unwrap_or(true), blimp_ground_ws_interface::MessageG2V::SensorData{id: serde_json::to_string::<blimp_onboard_software::obsw_algo::SensorType>(&sensors_update.0).unwrap(), data: sensors_update.1}).await;
+                        }
                     }
                 }
             }
-        }
-    } else {
-        eprintln!("Error occurred while accepting WebSocket connection!");
+        })
     }
 }
 
