@@ -57,9 +57,9 @@ impl SimChannels {
 
 pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimChannels {
     // When simulated blimp wants to set motors, it will be sent to this channel
-    let (motors_tx, mut motors_rx) = tokio::sync::broadcast::channel::<(u8, i32)>(64);
-    let (servos_tx, mut servos_rx) = tokio::sync::broadcast::channel::<(u8, i16)>(64);
-    let (sensors_tx, mut sensors_rx) =
+    let (motors_tx, motors_rx) = tokio::sync::broadcast::channel::<(u8, i32)>(64);
+    let (servos_tx, servos_rx) = tokio::sync::broadcast::channel::<(u8, i16)>(64);
+    let (sensors_tx, sensors_rx) =
         tokio::sync::broadcast::channel::<(blimp_onboard_software::obsw_algo::SensorType, f64)>(64);
 
     let sim: Arc<TMutex<Simulation>> = Arc::new(TMutex::new(Simulation::new()));
