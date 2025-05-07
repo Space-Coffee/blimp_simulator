@@ -2,16 +2,18 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use futures_util::{SinkExt, StreamExt};
 use tokio;
 use tokio::sync::Mutex as TMutex;
-use tokio_tungstenite;
 
 use blimp_ground_ws_interface;
-use blimp_ground_ws_interface::{BlimpGroundWebsocketStreamPair, MessageG2V, MessageV2G};
+use blimp_ground_ws_interface::{
+    BlimpGroundWebsocketStreamPair, MessageG2V, MessageV2G, VizInterest,
+};
+use blimp_onboard_software::obsw_algo;
+use blimp_onboard_software::obsw_algo::{MessageG2B, SensorType};
 
 pub fn handle_ground_ws_connection(
-    mut sim_channels: crate::sim::SimChannels,
+    sim_channels: crate::sim::SimChannels,
 ) -> impl Fn(
     BlimpGroundWebsocketStreamPair<tokio::net::TcpStream>,
 ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
@@ -20,9 +22,7 @@ pub fn handle_ground_ws_connection(
         Box::pin(async move {
             println!("New WebSocket connection");
 
-            let mut use_postcard: Option<bool> = None;
-            let curr_interest =
-                Arc::new(TMutex::new(blimp_ground_ws_interface::VizInterest::new()));
+            let curr_interest = Arc::new(TMutex::new(VizInterest::new()));
 
             let stream_pair = Arc::new(stream_pair);
 
@@ -52,7 +52,7 @@ pub fn handle_ground_ws_connection(
                             sensors_update = sensors_rx.recv() => {
                                 if curr_interest.lock().await.sensors {
                                     let sensors_update = sensors_update.unwrap();
-                                    stream_pair.send(MessageG2V::SensorData{id: serde_json::to_string::<blimp_onboard_software::obsw_algo::SensorType>(&sensors_update.0).unwrap(), data: sensors_update.1}).await.unwrap();
+                                    stream_pair.send(MessageG2V::SensorData{id: serde_json::to_string::<SensorType>(&sensors_update.0).unwrap(), data: sensors_update.1}).await.unwrap();
                                     // println!("Sent sensors update");
                                 }
                             }
@@ -80,13 +80,11 @@ pub fn handle_ground_ws_connection(
                     }) => {
                         sim_channels
                             .msg_tx
-                            .send(blimp_onboard_software::obsw_algo::MessageG2B::Control(
-                                blimp_onboard_software::obsw_algo::Controls {
-                                    throttle,
-                                    elevation,
-                                    yaw,
-                                },
-                            ))
+                            .send(MessageG2B::Control(obsw_algo::Controls {
+                                throttle,
+                                elevation,
+                                yaw,
+                            }))
                             .await
                             .unwrap();
                     }
