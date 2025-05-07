@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
@@ -7,40 +8,78 @@ use tokio::sync::Mutex as TMutex;
 use tokio_tungstenite;
 
 use blimp_ground_ws_interface;
-use blimp_ground_ws_interface::BlimpGroundWebsocketStreamPair;
+use blimp_ground_ws_interface::{BlimpGroundWebsocketStreamPair, MessageG2V, MessageV2G};
 
 pub fn handle_ground_ws_connection(
     mut sim_channels: crate::sim::SimChannels,
-) -> impl Fn(BlimpGroundWebsocketStreamPair<tokio::net::TcpStream>) -> Box<dyn Future<Output = ()>>
-{
+) -> impl Fn(
+    BlimpGroundWebsocketStreamPair<tokio::net::TcpStream>,
+) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     move |stream_pair: BlimpGroundWebsocketStreamPair<tokio::net::TcpStream>| {
-        Box::new(async move {
+        let sim_channels = sim_channels.resubscribe();
+        Box::pin(async move {
             println!("New WebSocket connection");
 
             let mut use_postcard: Option<bool> = None;
             let curr_interest =
                 Arc::new(TMutex::new(blimp_ground_ws_interface::VizInterest::new()));
 
-            async fn handle_message_v2g(
-                msg: blimp_ground_ws_interface::MessageV2G,
-                curr_interest: Arc<TMutex<blimp_ground_ws_interface::VizInterest>>,
-                blimp_send_msg_tx: tokio::sync::mpsc::Sender<
-                    blimp_onboard_software::obsw_algo::MessageG2B,
-                >,
-            ) {
-                //println!("Got V2G message:\n{:#?}", &msg);
-                match msg {
-                    blimp_ground_ws_interface::MessageV2G::DeclareInterest(interest) => {
+            let stream_pair = Arc::new(stream_pair);
+
+            {
+                let stream_pair = stream_pair.clone();
+                let curr_interest = curr_interest.clone();
+                let mut motors_rx = sim_channels.motors_rx;
+                let mut servos_rx = sim_channels.servos_rx;
+                let mut sensors_rx = sim_channels.sensors_rx;
+                tokio::spawn(async move {
+                    loop {
+                        tokio::select! {
+                            motors_update = motors_rx.recv() => {
+                                if curr_interest.lock().await.motors.clone() {
+                                    let motors_update = motors_update.unwrap();
+                                    stream_pair.send(MessageG2V::MotorSpeed{id: motors_update.0, speed: motors_update.1}).await.unwrap();
+                                    // println!("Sent motors update");
+                                }
+                            }
+                            servos_update = servos_rx.recv() => {
+                                if curr_interest.lock().await.servos {
+                                    let servos_update = servos_update.unwrap();
+                                    stream_pair.send(MessageG2V::ServoPosition{id: servos_update.0, angle:servos_update.1}).await.unwrap();
+                                    // println!("Sent servos update");
+                                }
+                            }
+                            sensors_update = sensors_rx.recv() => {
+                                if curr_interest.lock().await.sensors {
+                                    let sensors_update = sensors_update.unwrap();
+                                    stream_pair.send(MessageG2V::SensorData{id: serde_json::to_string::<blimp_onboard_software::obsw_algo::SensorType>(&sensors_update.0).unwrap(), data: sensors_update.1}).await.unwrap();
+                                    // println!("Sent sensors update");
+                                }
+                            }
+                        };
+                    }
+                });
+            }
+
+            loop {
+                let ws_msg = stream_pair
+                    .recv::<MessageV2G>()
+                    .await
+                    .expect("Couldn't receive message from WS client");
+
+                // println!("Got message: {:?}", ws_msg);
+
+                match ws_msg {
+                    MessageV2G::DeclareInterest(interest) => {
                         *(curr_interest.lock().await) = interest;
                     }
-                    blimp_ground_ws_interface::MessageV2G::Controls(
-                        blimp_ground_ws_interface::Controls {
-                            throttle,
-                            elevation,
-                            yaw,
-                        },
-                    ) => {
-                        blimp_send_msg_tx
+                    MessageV2G::Controls(blimp_ground_ws_interface::Controls {
+                        throttle,
+                        elevation,
+                        yaw,
+                    }) => {
+                        sim_channels
+                            .msg_tx
                             .send(blimp_onboard_software::obsw_algo::MessageG2B::Control(
                                 blimp_onboard_software::obsw_algo::Controls {
                                     throttle,
@@ -53,120 +92,6 @@ pub fn handle_ground_ws_connection(
                     }
                 }
             }
-
-            async fn send_ws_msg(
-                ws_stream: &mut tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
-                use_postcard: bool,
-                msg: blimp_ground_ws_interface::MessageG2V,
-            ) {
-                let msg_ser = if use_postcard {
-                    tokio_tungstenite::tungstenite::Message::Binary(
-                        postcard::to_stdvec(&msg).unwrap(),
-                    )
-                } else {
-                    tokio_tungstenite::tungstenite::Message::Text(
-                        serde_json::to_string(&msg).unwrap(),
-                    )
-                };
-                ws_stream.send(msg_ser).await.unwrap();
-            }
-
-            'ws_handler_loop: loop {
-                tokio::select! {
-                    ws_msg = ws_stream.next() => {
-                        if let Some(ws_msg) = ws_msg {
-                            if let Ok(ws_msg) = ws_msg {
-                                match ws_msg {
-                                    tokio_tungstenite::tungstenite::Message::Text(msg_str) => {
-                                        if let None = use_postcard {
-                                            use_postcard = Some(false);
-                                        }
-                                        if let Ok(msg) =
-                                            serde_json::from_str::<blimp_ground_ws_interface::MessageV2G>(
-                                                &msg_str,
-                                            ) {
-                                                handle_message_v2g(msg, curr_interest.clone(), sim_channels.msg_tx.clone()).await;
-                                        }
-                                        else {
-                                            eprintln!("Couldn't deserialize JSON message from WebSocket: \"{}\"", msg_str);
-                                        }
-                                    }
-                                    tokio_tungstenite::tungstenite::Message::Binary(msg_bin) => {
-                                        if let None = use_postcard {
-                                            use_postcard = Some(true);
-                                        }
-                                        if let Ok(msg) =
-                                            postcard::from_bytes::<blimp_ground_ws_interface::MessageV2G>(
-                                                &msg_bin,
-                                            ) {
-                                            handle_message_v2g(msg, curr_interest.clone(), sim_channels.msg_tx.clone()).await;
-                                        }
-                                        else {
-                                            eprintln!("Couldn't deserialize Postcard message from WebSocket: {:02X?}", msg_bin);
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                        else {
-                            println!(
-                                "WebSocket client {} disconnected",
-                                ws_stream
-                                    .get_ref()
-                                    .peer_addr()
-                                    .and_then(|x| Ok(format!("{}", x)))
-                                    .unwrap_or("unknown".to_string()));
-                            break 'ws_handler_loop;
-                        }
-                    }
-                    motors_update = sim_channels.motors_rx.recv() => {
-                        if curr_interest.lock().await.motors.clone() {
-                            let motors_update = motors_update.unwrap();
-                            send_ws_msg(
-                                &mut ws_stream,
-                                use_postcard.unwrap_or(true),
-                                blimp_ground_ws_interface::MessageG2V::MotorSpeed{id: motors_update.0, speed: motors_update.1}
-                            ).await;
-                        }
-                    }
-                    servos_update = sim_channels.servos_rx.recv() => {
-                        if curr_interest.lock().await.servos {
-                            let servos_update = servos_update.unwrap();
-                            send_ws_msg(&mut ws_stream, use_postcard.unwrap_or(true), blimp_ground_ws_interface::MessageG2V::ServoPosition{id: servos_update.0, angle:servos_update.1}).await;
-                        }
-                    }
-                    sensors_update = sim_channels.sensors_rx.recv() => {
-                        if curr_interest.lock().await.sensors {
-                            let sensors_update = sensors_update.unwrap();
-                            send_ws_msg(&mut ws_stream, use_postcard.unwrap_or(true), blimp_ground_ws_interface::MessageG2V::SensorData{id: serde_json::to_string::<blimp_onboard_software::obsw_algo::SensorType>(&sensors_update.0).unwrap(), data: sensors_update.1}).await;
-                        }
-                    }
-                }
-            }
         })
-    }
-}
-
-pub async fn ws_server_start(
-    shutdown_tx: tokio::sync::broadcast::Sender<()>,
-    sim_channels: &crate::sim::SimChannels,
-) {
-    let mut shutdown_rx = shutdown_tx.subscribe();
-    let ws_listener = tokio::net::TcpListener::bind("127.0.0.1:8765")
-        .await
-        .expect("Couldn't open WebSocket listener");
-    let mut ws_conn_next_id: u32 = 0;
-    loop {
-        tokio::select! {
-            res = ws_listener.accept() => {
-                if let Ok((stream, _)) = res {
-                    tokio::spawn(handle_ground_ws_connection(stream, sim_channels.resubscribe()));
-                }
-            }
-            _ = shutdown_rx.recv() => {
-                break;
-            }
-        }
     }
 }

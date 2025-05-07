@@ -13,6 +13,7 @@ use tokio::sync::Mutex as TMutex;
 use tokio_tungstenite;
 use typenum;
 
+use crate::websocket::handle_ground_ws_connection;
 use blimp_ground_ws_interface::BlimpGroundWebsocketServer;
 use blimp_onboard_software;
 use blimp_onboard_software::obsw_interface::BlimpAlgorithm;
@@ -29,8 +30,11 @@ async fn main() {
     // WebSocket server for visualizations, etc.
     let mut ws_server = BlimpGroundWebsocketServer::new("127.0.0.1:8765");
     ws_server.bind().await.expect("Failed to bind WS server");
-    tokio::spawn(ws_server.run());
-    crate::websocket::ws_server_start(shutdown_tx.clone(), &sim_channels).await;
+    tokio::spawn(async move {
+        ws_server
+            .run(handle_ground_ws_connection(sim_channels))
+            .await
+    });
 
     println!("Hello, world!");
 
