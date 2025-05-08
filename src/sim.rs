@@ -2,12 +2,15 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 use tokio::sync::{Mutex as TMutex, RwLock as TRwLock};
 
-use blimp_onboard_software::{obsw_algo::BlimpAction, obsw_interface::BlimpAlgorithm};
+use blimp_onboard_software::obsw_algo::{
+    BlimpAction, BlimpEvent, BlimpMainAlgo, MessageB2G, MessageG2B, SensorType,
+};
+use blimp_onboard_software::obsw_interface::BlimpAlgorithm;
 
 struct SimBlimp {
     // This thing is not Send nor Sync. Why?!!
     // coord_mat: nalgebra::Affine3<f64>,
-    main_algo: TRwLock<blimp_onboard_software::obsw_algo::BlimpMainAlgo>,
+    main_algo: TRwLock<BlimpMainAlgo>,
 }
 
 struct Simulation {
@@ -19,7 +22,7 @@ struct Simulation {
 
 impl Simulation {
     fn new() -> Self {
-        let blimp_main_algo = blimp_onboard_software::obsw_algo::BlimpMainAlgo::new();
+        let blimp_main_algo = BlimpMainAlgo::new();
         //blimp_main_algo.set_action_callback();
         //blimp_main_algo.set_action_callback(action_callback);
         Self {
@@ -37,11 +40,10 @@ impl Simulation {
 }
 
 pub struct SimChannels {
-    pub msg_tx: tokio::sync::mpsc::Sender<blimp_onboard_software::obsw_algo::MessageG2B>,
+    pub msg_tx: tokio::sync::mpsc::Sender<MessageG2B>,
     pub motors_rx: tokio::sync::broadcast::Receiver<(u8, i32)>,
     pub servos_rx: tokio::sync::broadcast::Receiver<(u8, i16)>,
-    pub sensors_rx:
-        tokio::sync::broadcast::Receiver<(blimp_onboard_software::obsw_algo::SensorType, f64)>,
+    pub sensors_rx: tokio::sync::broadcast::Receiver<(SensorType, f64)>,
 }
 
 impl SimChannels {
@@ -59,8 +61,7 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
     // When simulated blimp wants to set motors, it will be sent to this channel
     let (motors_tx, motors_rx) = tokio::sync::broadcast::channel::<(u8, i32)>(64);
     let (servos_tx, servos_rx) = tokio::sync::broadcast::channel::<(u8, i16)>(64);
-    let (sensors_tx, sensors_rx) =
-        tokio::sync::broadcast::channel::<(blimp_onboard_software::obsw_algo::SensorType, f64)>(64);
+    let (sensors_tx, sensors_rx) = tokio::sync::broadcast::channel::<(SensorType, f64)>(64);
 
     let sim: Arc<TMutex<Simulation>> = Arc::new(TMutex::new(Simulation::new()));
 
@@ -80,54 +81,34 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                 // println!("Action {:#?}", action);
                 match action {
                     BlimpAction::SendMsg(msg) => {
-                        if let Ok(msg_des) = postcard::from_bytes::<
-                            blimp_onboard_software::obsw_algo::MessageB2G,
-                        >(&msg)
-                        {
-                            //println!("Got message:\n{:#?}", msg_des);
+                        // println!("Got message:\n{:#?}", msg);
 
-                            match msg_des {
-                            blimp_onboard_software::obsw_algo::MessageB2G::Ping(ping_id) => {
+                        match msg.as_ref() {
+                            MessageB2G::Ping(ping_id) => {
                                 let sim_locked = sim.lock().await;
                                 // let sim_locked=sim.blocking_lock();
                                 let main_algo_locked = sim_locked.blimp.main_algo.read().await;
                                 // let main_algo_locked=sim_locked.blimp.main_algo.blocking_lock();
-                                let msg_serialized = postcard::to_stdvec::<blimp_onboard_software::obsw_algo::MessageG2B>(
-                                    &blimp_onboard_software::obsw_algo::MessageG2B::Pong(ping_id))
-                                    .unwrap();
-                                main_algo_locked.handle_event(
-                                    blimp_onboard_software::obsw_algo::BlimpEvent::GetMsg(msg_serialized)).await;
+                                main_algo_locked
+                                    .handle_event(BlimpEvent::GetMsg(MessageG2B::Pong(*ping_id)))
+                                    .await;
                             }
-                            blimp_onboard_software::obsw_algo::MessageB2G::Pong(ping_id) => {}
-                            blimp_onboard_software::obsw_algo::MessageB2G::ForwardAction(
-                                fwd_action,
-                            ) => match fwd_action {
-                                BlimpAction::SetMotor {
-                                    motor,
-                                    speed,
-                                } => {
-                                    motors_tx.send((motor, speed)).unwrap();
+                            MessageB2G::Pong(_ping_id) => {}
+                            MessageB2G::ForwardAction(fwd_action) => match fwd_action {
+                                BlimpAction::SetMotor { motor, speed } => {
+                                    motors_tx.send((*motor, *speed)).unwrap();
                                 }
-                                BlimpAction::SetServo {
-                                    servo,
-                                    location,
-                                } => {
-                                    servos_tx.send((servo, location)).unwrap();
+                                BlimpAction::SetServo { servo, location } => {
+                                    servos_tx.send((*servo, *location)).unwrap();
                                 }
                                 _ => {}
                             },
-                            blimp_onboard_software::obsw_algo::MessageB2G::ForwardEvent(
-                                fwd_event,
-                            ) => match fwd_event {
-                                blimp_onboard_software::obsw_algo::BlimpEvent::SensorDataF64(
-                                    sns,
-                                    data,
-                                ) => {
-                                    sensors_tx.send((sns, data)).unwrap();
+                            MessageB2G::ForwardEvent(fwd_event) => match fwd_event {
+                                BlimpEvent::SensorDataF64(sns, data) => {
+                                    sensors_tx.send((sns.clone(), *data)).unwrap();
                                 }
                                 _ => {}
                             },
-                        }
                         }
                     }
                     _ => {}
@@ -169,25 +150,22 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
         let mut shutdown_rx = shutdown_tx.subscribe();
         let sim = sim.clone();
         let (blimp_send_msg_tx, mut blimp_send_msg_rx) =
-            tokio::sync::mpsc::channel::<blimp_onboard_software::obsw_algo::MessageG2B>(64);
+            tokio::sync::mpsc::channel::<MessageG2B>(64);
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     msg = blimp_send_msg_rx.recv() => {
                         if let Some(msg) = msg {
-                        sim.lock()
-                            .await
-                            .blimp
-                            .main_algo
-                            .read()
-                            .await
-                            .handle_event(blimp_onboard_software::obsw_algo::BlimpEvent::GetMsg(
-                                postcard::to_stdvec::<blimp_onboard_software::obsw_algo::MessageG2B>(
-                                    &msg,
-                                )
-                                .unwrap(),
-                            ))
-                            .await;
+                            // println!("Sending to blimp: {:?}", msg);
+                            sim.lock()
+                                .await
+                                .blimp
+                                .main_algo
+                                .read()
+                                .await
+                                .handle_event(BlimpEvent::GetMsg(
+                                    msg))
+                                .await;
                         }
                         else {
                             break;
@@ -211,10 +189,7 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
             let mut i: u32 = 0;
             loop {
                 println!("Pinging the blimp with id {}", i);
-                msg_tx
-                    .send(blimp_onboard_software::obsw_algo::MessageG2B::Ping(i))
-                    .await
-                    .unwrap();
+                msg_tx.send(MessageG2B::Ping(i)).await.unwrap();
                 i += 1;
 
                 tokio::select! {
@@ -241,12 +216,10 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                     .main_algo
                     .read()
                     .await
-                    .handle_event(
-                        blimp_onboard_software::obsw_algo::BlimpEvent::SensorDataF64(
-                            blimp_onboard_software::obsw_algo::SensorType::Barometer,
-                            (counter as f64 * 0.1).sin() * 2000.0 + 101300.0,
-                        ),
-                    )
+                    .handle_event(BlimpEvent::SensorDataF64(
+                        SensorType::Barometer,
+                        (counter as f64 * 0.1).sin() * 2000.0 + 101300.0,
+                    ))
                     .await;
 
                 tokio::select! {
