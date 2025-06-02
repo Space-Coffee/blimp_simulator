@@ -15,7 +15,7 @@ struct SimBlimp {
 
 struct Simulation {
     blimp: SimBlimp,
-    earth_radius: f64,
+    _earth_radius: f64,
 }
 
 // impl Send for Simulation {}
@@ -30,7 +30,7 @@ impl Simulation {
                 // coord_mat: nalgebra::Affine3::identity(),
                 main_algo: TRwLock::new(blimp_main_algo),
             },
-            earth_radius: 6371000.0,
+            _earth_radius: 6371000.0,
         }
     }
 
@@ -40,7 +40,7 @@ impl Simulation {
 }
 
 pub struct SimChannels {
-    pub msg_tx: tokio::sync::mpsc::Sender<MessageG2B>,
+    pub msg_egress_tx: tokio::sync::mpsc::Sender<MessageG2B>,
     pub motors_rx: tokio::sync::broadcast::Receiver<(u8, i32)>,
     pub servos_rx: tokio::sync::broadcast::Receiver<(u8, i16)>,
     pub sensors_rx: tokio::sync::broadcast::Receiver<(SensorType, f64)>,
@@ -49,7 +49,7 @@ pub struct SimChannels {
 impl SimChannels {
     pub fn resubscribe(&self) -> Self {
         Self {
-            msg_tx: self.msg_tx.clone(),
+            msg_egress_tx: self.msg_egress_tx.clone(),
             motors_rx: self.motors_rx.resubscribe(),
             servos_rx: self.servos_rx.resubscribe(),
             sensors_rx: self.sensors_rx.resubscribe(),
@@ -236,7 +236,7 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
     }
 
     SimChannels {
-        msg_tx: blimp_send_msg_tx,
+        msg_egress_tx: blimp_send_msg_tx,
         motors_rx,
         servos_rx,
         sensors_rx,

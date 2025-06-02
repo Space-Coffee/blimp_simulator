@@ -23,6 +23,7 @@ async fn main() {
         ws_server
             .run(handle_ground_ws_connection(sim_channels))
             .await
+            .expect("Error occurred while running WS server");
     });
 
     println!("Hello, world!");

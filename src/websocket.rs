@@ -79,7 +79,7 @@ pub fn handle_ground_ws_connection(
                         yaw,
                     }) => {
                         sim_channels
-                            .msg_tx
+                            .msg_egress_tx
                             .send(MessageG2B::Control(obsw_algo::Controls {
                                 throttle,
                                 elevation,
