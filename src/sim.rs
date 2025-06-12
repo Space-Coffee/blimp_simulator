@@ -41,8 +41,8 @@ impl Simulation {
 
 pub struct SimChannels {
     pub msg_egress_tx: tokio::sync::mpsc::Sender<MessageG2B>,
-    pub motors_rx: tokio::sync::broadcast::Receiver<(u8, i32)>,
-    pub servos_rx: tokio::sync::broadcast::Receiver<(u8, i16)>,
+    pub motors_rx: tokio::sync::broadcast::Receiver<(u8, f32)>,
+    pub servos_rx: tokio::sync::broadcast::Receiver<(u8, f32)>,
     pub sensors_rx: tokio::sync::broadcast::Receiver<(SensorType, f64)>,
 }
 
@@ -59,8 +59,8 @@ impl SimChannels {
 
 pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimChannels {
     // When simulated blimp wants to set motors, it will be sent to this channel
-    let (motors_tx, motors_rx) = tokio::sync::broadcast::channel::<(u8, i32)>(64);
-    let (servos_tx, servos_rx) = tokio::sync::broadcast::channel::<(u8, i16)>(64);
+    let (motors_tx, motors_rx) = tokio::sync::broadcast::channel::<(u8, f32)>(64);
+    let (servos_tx, servos_rx) = tokio::sync::broadcast::channel::<(u8, f32)>(64);
     let (sensors_tx, sensors_rx) = tokio::sync::broadcast::channel::<(SensorType, f64)>(64);
 
     let sim: Arc<TMutex<Simulation>> = Arc::new(TMutex::new(Simulation::new()));

@@ -73,18 +73,10 @@ pub fn handle_ground_ws_connection(
                     MessageV2G::DeclareInterest(interest) => {
                         *(curr_interest.lock().await) = interest;
                     }
-                    MessageV2G::Controls(blimp_ground_ws_interface::Controls {
-                        throttle,
-                        elevation,
-                        yaw,
-                    }) => {
+                    MessageV2G::Controls(ctrls) => {
                         sim_channels
                             .msg_egress_tx
-                            .send(MessageG2B::Control(obsw_algo::Controls {
-                                throttle,
-                                elevation,
-                                yaw,
-                            }))
+                            .send(MessageG2B::Control(ctrls))
                             .await
                             .unwrap();
                     }
