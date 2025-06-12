@@ -38,21 +38,33 @@ pub fn handle_ground_ws_connection(
                             motors_update = motors_rx.recv() => {
                                 if curr_interest.lock().await.motors.clone() {
                                     let motors_update = motors_update.unwrap();
-                                    stream_pair.send(MessageG2V::MotorSpeed{id: motors_update.0, speed: motors_update.1}).await.unwrap();
+                                    stream_pair.send(MessageG2V::MotorSpeed{
+                                        id: motors_update.0,
+                                        speed: motors_update.1
+                                    })
+                                    .await.unwrap();
                                     // println!("Sent motors update");
                                 }
                             }
                             servos_update = servos_rx.recv() => {
                                 if curr_interest.lock().await.servos {
                                     let servos_update = servos_update.unwrap();
-                                    stream_pair.send(MessageG2V::ServoPosition{id: servos_update.0, angle:servos_update.1}).await.unwrap();
+                                    stream_pair.send(MessageG2V::ServoPosition{
+                                        id: servos_update.0,
+                                        angle: servos_update.1
+                                    })
+                                    .await.unwrap();
                                     // println!("Sent servos update");
                                 }
                             }
                             sensors_update = sensors_rx.recv() => {
                                 if curr_interest.lock().await.sensors {
                                     let sensors_update = sensors_update.unwrap();
-                                    stream_pair.send(MessageG2V::SensorData{id: serde_json::to_string::<SensorType>(&sensors_update.0).unwrap(), data: sensors_update.1}).await.unwrap();
+                                    stream_pair.send(MessageG2V::SensorData{
+                                        id: serde_json::to_string::<SensorType>(&sensors_update.0).unwrap(),
+                                        data: sensors_update.1
+                                    })
+                                    .await.unwrap();
                                     // println!("Sent sensors update");
                                 }
                             }
