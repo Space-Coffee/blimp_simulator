@@ -1,9 +1,9 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use tokio::sync::{Mutex as TMutex, RwLock as TRwLock};
+use tokio::sync::{broadcast, mpsc, Mutex as TMutex, RwLock as TRwLock};
 
 use blimp_onboard_software::obsw_algo::{
-    BlimpAction, BlimpEvent, BlimpMainAlgo, MessageB2G, MessageG2B, SensorType,
+    BlimpAction, BlimpEvent, BlimpMainAlgo, BlimpState, MessageB2G, MessageG2B, SensorType,
 };
 use blimp_onboard_software::obsw_interface::BlimpAlgorithm;
 
@@ -44,6 +44,7 @@ pub struct SimChannels {
     pub motors_rx: tokio::sync::broadcast::Receiver<(u8, f32)>,
     pub servos_rx: tokio::sync::broadcast::Receiver<(u8, f32)>,
     pub sensors_rx: tokio::sync::broadcast::Receiver<(SensorType, f64)>,
+    pub state_rx: broadcast::Receiver<BlimpState>,
 }
 
 impl SimChannels {
@@ -53,6 +54,7 @@ impl SimChannels {
             motors_rx: self.motors_rx.resubscribe(),
             servos_rx: self.servos_rx.resubscribe(),
             sensors_rx: self.sensors_rx.resubscribe(),
+            state_rx: self.state_rx.resubscribe(),
         }
     }
 }
@@ -62,6 +64,7 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
     let (motors_tx, motors_rx) = tokio::sync::broadcast::channel::<(u8, f32)>(64);
     let (servos_tx, servos_rx) = tokio::sync::broadcast::channel::<(u8, f32)>(64);
     let (sensors_tx, sensors_rx) = tokio::sync::broadcast::channel::<(SensorType, f64)>(64);
+    let (state_tx, state_rx) = tokio::sync::broadcast::channel::<BlimpState>(64);
 
     let sim: Arc<TMutex<Simulation>> = Arc::new(TMutex::new(Simulation::new()));
 
@@ -72,11 +75,13 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
         let motors_tx = motors_tx.clone();
         let servos_tx = servos_tx.clone();
         let sensors_tx = sensors_tx.clone();
+        let state_tx = state_tx.clone();
         Arc::new(move |action| {
             let sim = sim.clone();
             let motors_tx = motors_tx.clone();
             let servos_tx = servos_tx.clone();
             let sensors_tx = sensors_tx.clone();
+            let state_tx = state_tx.clone();
             Box::pin(async move {
                 // println!("Action {:#?}", action);
                 match action {
@@ -109,6 +114,9 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                                 }
                                 _ => {}
                             },
+                            MessageB2G::BlimpState(blimp_state) => {
+                                state_tx.send(blimp_state.clone()).unwrap();
+                            }
                         }
                     }
                     _ => {}
@@ -240,5 +248,6 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
         motors_rx,
         servos_rx,
         sensors_rx,
+        state_rx,
     }
 }

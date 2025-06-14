@@ -32,6 +32,7 @@ pub fn handle_ground_ws_connection(
                 let mut motors_rx = sim_channels.motors_rx;
                 let mut servos_rx = sim_channels.servos_rx;
                 let mut sensors_rx = sim_channels.sensors_rx;
+                let mut state_rx = sim_channels.state_rx;
                 tokio::spawn(async move {
                     loop {
                         tokio::select! {
@@ -66,6 +67,12 @@ pub fn handle_ground_ws_connection(
                                     })
                                     .await.unwrap();
                                     // println!("Sent sensors update");
+                                }
+                            }
+                            state_update = state_rx.recv() => {
+                                if curr_interest.lock().await.state {
+                                    stream_pair.send(MessageG2V::State(state_update.unwrap()))
+                                    .await.unwrap();
                                 }
                             }
                         };
