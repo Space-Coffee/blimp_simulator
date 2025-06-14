@@ -81,24 +81,24 @@ pub fn handle_ground_ws_connection(
             }
 
             loop {
-                let ws_msg = stream_pair
-                    .recv::<MessageV2G>()
-                    .await
-                    .expect("Couldn't receive message from WS client");
+                if let Ok(ws_msg) = stream_pair.recv::<MessageV2G>().await {
+                    // println!("Got message: {:?}", ws_msg);
 
-                // println!("Got message: {:?}", ws_msg);
-
-                match ws_msg {
-                    MessageV2G::DeclareInterest(interest) => {
-                        *(curr_interest.lock().await) = interest;
+                    match ws_msg {
+                        MessageV2G::DeclareInterest(interest) => {
+                            *(curr_interest.lock().await) = interest;
+                        }
+                        MessageV2G::Controls(ctrls) => {
+                            sim_channels
+                                .msg_egress_tx
+                                .send(MessageG2B::Control(ctrls))
+                                .await
+                                .unwrap();
+                        }
                     }
-                    MessageV2G::Controls(ctrls) => {
-                        sim_channels
-                            .msg_egress_tx
-                            .send(MessageG2B::Control(ctrls))
-                            .await
-                            .unwrap();
-                    }
+                } else {
+                    eprintln!("Couldn't receive message from WS client");
+                    break;
                 }
             }
         })
