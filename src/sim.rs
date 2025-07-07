@@ -226,7 +226,7 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                     .await
                     .handle_event(BlimpEvent::SensorDataF64(
                         SensorType::Barometer,
-                        (counter as f64 * 0.1).sin().abs() * 1000000.0 + 101300.0,
+                        (-(counter as f64 * 0.1).sin().abs()) * 100.0 + 101300.0,
                     ))
                     .await;
                 sim.lock()
