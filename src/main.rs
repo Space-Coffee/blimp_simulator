@@ -1,9 +1,11 @@
 mod sim;
+mod virtual_camera;
 mod websocket;
 
 use tokio;
 
 use crate::sim::sim_start;
+use crate::virtual_camera::virtual_camera_start;
 use crate::websocket::handle_ground_ws_connection;
 use blimp_ground_ws_interface::BlimpGroundWebsocketServer;
 
@@ -25,6 +27,8 @@ async fn main() {
             .await
             .expect("Error occurred while running WS server");
     });
+
+    virtual_camera_start().await;
 
     println!("Hello, world!");
 
