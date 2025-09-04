@@ -10,7 +10,7 @@ use blimp_onboard_software::obsw_interface::BlimpAlgorithm;
 struct SimBlimp {
     // This thing is not Send nor Sync. Why?!!
     // coord_mat: nalgebra::Affine3<f64>,
-    main_algo: TRwLock<BlimpMainAlgo>,
+    main_algo: Arc<BlimpMainAlgo>,
 }
 
 struct Simulation {
@@ -28,14 +28,14 @@ impl Simulation {
         Self {
             blimp: SimBlimp {
                 // coord_mat: nalgebra::Affine3::identity(),
-                main_algo: TRwLock::new(blimp_main_algo),
+                main_algo: Arc::new(blimp_main_algo),
             },
             _earth_radius: 6371000.0,
         }
     }
 
     async fn step(&self) {
-        self.blimp.main_algo.read().await.step().await;
+        self.blimp.main_algo.step().await;
     }
 }
 
@@ -91,10 +91,10 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                         match msg.as_ref() {
                             MessageB2G::Ping(ping_id) => {
                                 let sim_locked = sim.lock().await;
-                                // let sim_locked=sim.blocking_lock();
-                                let main_algo_locked = sim_locked.blimp.main_algo.read().await;
-                                // let main_algo_locked=sim_locked.blimp.main_algo.blocking_lock();
-                                main_algo_locked
+                                sim_locked
+                                    .blimp
+                                    .main_algo
+                                    .clone()
                                     .handle_event(BlimpEvent::GetMsg(MessageG2B::Pong(*ping_id)))
                                     .await;
                             }
@@ -128,8 +128,6 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
         .await
         .blimp
         .main_algo
-        .write()
-        .await
         .set_action_callback(blimp_action_callback)
         .await;
 
@@ -169,8 +167,7 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                                 .await
                                 .blimp
                                 .main_algo
-                                .read()
-                                .await
+                                .clone()
                                 .handle_event(BlimpEvent::GetMsg(
                                     msg))
                                 .await;
@@ -222,8 +219,7 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                     .await
                     .blimp
                     .main_algo
-                    .read()
-                    .await
+                    .clone()
                     .handle_event(BlimpEvent::SensorDataF64(
                         SensorType::Barometer,
                         (counter as f64 * 0.1).sin().abs() * 1000000.0 + 101300.0,
@@ -233,8 +229,7 @@ pub async fn sim_start(shutdown_tx: tokio::sync::broadcast::Sender<()>) -> SimCh
                     .await
                     .blimp
                     .main_algo
-                    .read()
-                    .await
+                    .clone()
                     .handle_event(BlimpEvent::SensorDataF64(
                         SensorType::MagnetometerHeading,
                         (counter as f64 * 0.1).sin(),
