@@ -9,8 +9,17 @@ use crate::virtual_camera::virtual_camera_start;
 use crate::websocket::handle_ground_ws_connection;
 use blimp_ground_ws_interface::BlimpGroundWebsocketServer;
 
-#[tokio::main]
-async fn main() {
+fn main() {
+    std::thread::spawn(|| {
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async_main());
+    });
+
+    virtual_camera_start();
+}
+
+async fn async_main() {
     // let ws_conns: Arc<TMutex<std::collections::BTreeMap<u32, tokio::sync::mpsc::Sender<()>>>> =
     //     Arc::new(TMutex::new(std::collections::BTreeMap::new()));
 
@@ -27,8 +36,6 @@ async fn main() {
             .await
             .expect("Error occurred while running WS server");
     });
-
-    virtual_camera_start().await;
 
     println!("Hello, world!");
 
