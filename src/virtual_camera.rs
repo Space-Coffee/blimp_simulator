@@ -51,8 +51,16 @@ pub fn virtual_camera_start() {
     ) {
         let mut ffmpeg_stdin = ffmpeg.0.stdin.as_ref().expect("Failed to get ffmpeg stdin");
         let dest = dest.single().0.clone();
+        let dest = dest.lock().unwrap();
+        let mut fake_data = Vec::new();
+        fake_data.resize(dest.data.len(), 0);
+        let mut counter: u8 = 0;
+        for b in &mut fake_data {
+            *b = counter;
+            counter = counter.wrapping_add(1);
+        }
         ffmpeg_stdin
-            .write_all(&dest.lock().unwrap().data)
+            .write_all(&fake_data)
             .expect("Failed to send video data to ffmpeg");
     }
 
@@ -67,8 +75,8 @@ pub fn virtual_camera_start() {
             "-colorspace",
             "bt709",
             "-video_size",
-            "640x360",
-            "-",
+            "640x480",
+            "pipe:0",
         ])
         .stdin(std::process::Stdio::piped())
         .spawn()
