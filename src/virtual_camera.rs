@@ -3,6 +3,8 @@ use std::io::Write;
 use bevy::prelude::*;
 use bevy_headless_render;
 
+const USE_FFPLAY: bool = true;
+
 #[derive(Resource)]
 struct FfmpegProcess(std::process::Child);
 
@@ -64,8 +66,9 @@ pub fn virtual_camera_start() {
             .expect("Failed to send video data to ffmpeg");
     }
 
-    let ffmpeg = std::process::Command::new("ffplay")
-        .args([
+    let mut args = Vec::<String>::new();
+    args.extend_from_slice(
+        &[
             "-f",
             "rawvideo",
             "-vcodec",
@@ -76,8 +79,36 @@ pub fn virtual_camera_start() {
             "bt709",
             "-video_size",
             "640x480",
-            "pipe:0",
-        ])
+            "-use_wallclock_as_timestamps",
+            "1",
+        ]
+        .map(|s| s.to_owned()),
+    );
+    if !USE_FFPLAY {
+        args.push("-i".to_owned());
+    }
+    args.push("pipe:0".to_owned());
+    if !USE_FFPLAY {
+        args.extend_from_slice(
+            &[
+                "-c:v",
+                "libx264",
+                "-tune",
+                "zerolatency",
+                "-crf",
+                "18",
+                "-f",
+                "rtsp",
+                "-rtsp_transport",
+                "tcp",
+                "rtsp://127.0.0.1:8554/virtual",
+            ]
+            .map(|s| s.to_owned()),
+        );
+    }
+
+    let ffmpeg = std::process::Command::new(if USE_FFPLAY { "ffplay" } else { "ffmpeg" })
+        .args(args)
         .stdin(std::process::Stdio::piped())
         .spawn()
         .expect("Couldn't start ffmpeg");
