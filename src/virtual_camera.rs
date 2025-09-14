@@ -3,6 +3,7 @@ use std::io::Write;
 use bevy::prelude::*;
 use bevy_headless_render;
 
+const FAKE_VIDEO_DATA: bool = false;
 const USE_FFPLAY: bool = true;
 
 #[derive(Resource)]
@@ -54,16 +55,23 @@ pub fn virtual_camera_start() {
         let mut ffmpeg_stdin = ffmpeg.0.stdin.as_ref().expect("Failed to get ffmpeg stdin");
         let dest = dest.single().0.clone();
         let dest = dest.lock().unwrap();
-        let mut fake_data = Vec::new();
-        fake_data.resize(dest.data.len(), 0);
-        let mut counter: u8 = 0;
-        for b in &mut fake_data {
-            *b = counter;
-            counter = counter.wrapping_add(1);
+
+        if FAKE_VIDEO_DATA {
+            let mut fake_data = Vec::new();
+            fake_data.resize(dest.data.len(), 0);
+            let mut counter: u8 = 0;
+            for b in &mut fake_data {
+                *b = counter;
+                counter = counter.wrapping_add(1);
+            }
+            ffmpeg_stdin
+                .write_all(&fake_data)
+                .expect("Failed to send video data to ffmpeg");
+        } else {
+            ffmpeg_stdin
+                .write_all(&dest.data)
+                .expect("Failed to send video data to ffmpeg");
         }
-        ffmpeg_stdin
-            .write_all(&fake_data)
-            .expect("Failed to send video data to ffmpeg");
     }
 
     let mut args = Vec::<String>::new();
