@@ -23,7 +23,6 @@ pub fn virtual_camera_start() {
         asset_server: ResMut<AssetServer>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<StandardMaterial>>,
-        // win_resize_ev_writer: EventWriter<bevy::window::WindowResized>,
     ) {
         // Headless rendering stuff
         let size = bevy::render::render_resource::Extent3d {
@@ -61,13 +60,13 @@ pub fn virtual_camera_start() {
                 target: image_handle.into(),
                 ..default()
             },
-            Transform::from_xyz(-1.0, 1.0, 0.0)
+            Transform::from_xyz(0.0, 2.5, -2.0)
                 .looking_at(Vec3::new(5.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
         ));
 
         // Spawn blimp
         let blimp_mesh = meshes.add(Cuboid::new(1.0, 1.0, 2.5));
-        let blimp_material = materials.add(Color::srgb_u8(255, 128, 0));
+        let blimp_material = materials.add(Color::srgb_u8(192, 255, 128));
         cmds.spawn((
             BlimpComponent,
             Mesh3d(blimp_mesh),
@@ -76,9 +75,14 @@ pub fn virtual_camera_start() {
         ));
 
         //Spawn light
-        cmds.spawn(());
-
-        // win_resize_ev_writer.send(bevy::window::WindowResized { window: todo!() });
+        cmds.spawn((
+            PointLight {
+                color: Color::srgb_u8(255, 255, 255),
+                shadows_enabled: true,
+                ..default()
+            },
+            Transform::from_xyz(0.0, 0.0, 0.0),
+        ));
     }
 
     fn update_rendering(
@@ -114,7 +118,9 @@ pub fn virtual_camera_start() {
     ) {
         let mut blimp = blimp.single_mut();
         let virtual_blimp_data = virtual_blimp_data.as_mut();
-        virtual_blimp_data.pos += Vec3::new(0.0, 0.0, 0.05) * time.delta_secs();
+        virtual_blimp_data.pos += (Vec3::new(0.0, 0.0, 1.0)
+            * ((time.elapsed_secs() * 5.0).sin() * 0.8 + 0.05))
+            * time.delta_secs();
         *blimp = Transform::from_translation(virtual_blimp_data.pos);
     }
 
