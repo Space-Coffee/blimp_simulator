@@ -4,10 +4,18 @@ use bevy::prelude::*;
 use bevy_headless_render;
 
 const FAKE_VIDEO_DATA: bool = false;
-const USE_FFPLAY: bool = true;
+const USE_FFPLAY: bool = false;
 
 #[derive(Resource)]
 struct FfmpegProcess(std::process::Child);
+
+#[derive(Resource)]
+struct VirtualBlimpData {
+    pos: Vec3,
+}
+
+#[derive(Component)]
+struct BlimpComponent;
 
 pub fn virtual_camera_start() {
     fn setup(
@@ -60,6 +68,7 @@ pub fn virtual_camera_start() {
         let blimp_mesh = meshes.add(Cuboid::new(1.0, 1.0, 2.5));
         let blimp_material = materials.add(Color::srgb_u8(255, 128, 0));
         cmds.spawn((
+            BlimpComponent,
             Mesh3d(blimp_mesh),
             MeshMaterial3d(blimp_material),
             Transform::from_xyz(5.0, 0.0, 0.0),
@@ -69,7 +78,7 @@ pub fn virtual_camera_start() {
         cmds.spawn(());
     }
 
-    fn update(
+    fn update_rendering(
         dest: Query<&bevy_headless_render::components::HeadlessRenderDestination>,
         ffmpeg: ResMut<FfmpegProcess>,
     ) {
@@ -93,6 +102,17 @@ pub fn virtual_camera_start() {
                 .write_all(&dest.data)
                 .expect("Failed to send video data to ffmpeg");
         }
+    }
+
+    fn update_blimp(
+        mut blimp: Query<&mut Transform, With<BlimpComponent>>,
+        mut virtual_blimp_data: ResMut<VirtualBlimpData>,
+        time: Res<Time>,
+    ) {
+        let mut blimp = blimp.single_mut();
+        let virtual_blimp_data = virtual_blimp_data.as_mut();
+        virtual_blimp_data.pos += Vec3::new(0.0, 0.0, 0.05) * time.delta_secs();
+        *blimp = Transform::from_translation(virtual_blimp_data.pos);
     }
 
     let mut args = Vec::<String>::new();
@@ -147,8 +167,12 @@ pub fn virtual_camera_start() {
         .add_plugins(DefaultPlugins)
         .add_plugins(bevy_headless_render::HeadlessRenderPlugin)
         .add_systems(Startup, setup)
-        .add_systems(Update, update)
-        .insert_resource(FfmpegProcess(ffmpeg));
+        .add_systems(PostUpdate, update_rendering)
+        .add_systems(FixedUpdate, update_blimp)
+        .insert_resource(FfmpegProcess(ffmpeg))
+        .insert_resource(VirtualBlimpData {
+            pos: Vec3::new(5.0, 0.0, 0.0),
+        });
 
     bevy_app.run();
 }
