@@ -23,6 +23,7 @@ pub fn virtual_camera_start() {
         asset_server: ResMut<AssetServer>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<StandardMaterial>>,
+        // win_resize_ev_writer: EventWriter<bevy::window::WindowResized>,
     ) {
         // Headless rendering stuff
         let size = bevy::render::render_resource::Extent3d {
@@ -76,6 +77,8 @@ pub fn virtual_camera_start() {
 
         //Spawn light
         cmds.spawn(());
+
+        // win_resize_ev_writer.send(bevy::window::WindowResized { window: todo!() });
     }
 
     fn update_rendering(
@@ -164,15 +167,57 @@ pub fn virtual_camera_start() {
 
     let mut bevy_app = App::new();
     bevy_app
-        .add_plugins(DefaultPlugins)
-        .add_plugins(bevy_headless_render::HeadlessRenderPlugin)
+        .add_plugins((
+            bevy::app::PanicHandlerPlugin,
+            bevy::log::LogPlugin::default(),
+            TaskPoolPlugin::default(),
+            FrameCountPlugin,
+            bevy::time::TimePlugin,
+            TransformPlugin,
+            bevy::diagnostic::DiagnosticsPlugin,
+            bevy::input::InputPlugin,
+            bevy::app::ScheduleRunnerPlugin::default(),
+            WindowPlugin {
+                primary_window: None,
+                exit_condition: bevy::window::ExitCondition::DontExit,
+                ..default()
+            },
+        ))
+        .add_plugins((
+            bevy::a11y::AccessibilityPlugin,
+            bevy::app::TerminalCtrlCHandlerPlugin,
+            AssetPlugin::default(),
+            bevy::scene::ScenePlugin,
+            bevy::winit::WinitPlugin::<bevy::winit::WakeUp>::default(),
+            bevy::render::RenderPlugin::default(),
+            ImagePlugin::default(),
+            bevy::render::pipelined_rendering::PipelinedRenderingPlugin,
+            bevy::core_pipeline::CorePipelinePlugin,
+            bevy::sprite::SpritePlugin::default(),
+        ))
+        .add_plugins((
+            bevy::text::TextPlugin,
+            bevy::ui::UiPlugin::default(),
+            bevy::pbr::PbrPlugin::default(),
+            bevy::gltf::GltfPlugin::default(),
+            bevy::audio::AudioPlugin::default(),
+            GilrsPlugin,
+            AnimationPlugin,
+            bevy::gizmos::GizmoPlugin,
+            bevy::state::app::StatesPlugin,
+            // bevy::dev_tools::DevToolsPlugin,
+            // bevy::dev_tools::CiTestingPlugin,
+            DefaultPickingPlugins,
+            bevy_headless_render::HeadlessRenderPlugin,
+        ))
         .add_systems(Startup, setup)
         .add_systems(PostUpdate, update_rendering)
         .add_systems(FixedUpdate, update_blimp)
         .insert_resource(FfmpegProcess(ffmpeg))
         .insert_resource(VirtualBlimpData {
             pos: Vec3::new(5.0, 0.0, 0.0),
-        });
+        })
+        .insert_resource(Events::<bevy::window::WindowResized>::default());
 
     bevy_app.run();
 }
