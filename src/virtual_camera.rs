@@ -10,7 +10,13 @@ const USE_FFPLAY: bool = true;
 struct FfmpegProcess(std::process::Child);
 
 pub fn virtual_camera_start() {
-    fn setup(mut cmds: Commands, asset_server: ResMut<AssetServer>) {
+    fn setup(
+        mut cmds: Commands,
+        asset_server: ResMut<AssetServer>,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut materials: ResMut<Assets<StandardMaterial>>,
+    ) {
+        // Headless rendering stuff
         let size = bevy::render::render_resource::Extent3d {
             width: 640,
             height: 480,
@@ -35,6 +41,7 @@ pub fn virtual_camera_start() {
 
         let image_handle = asset_server.add(dest_image);
 
+        // Spawn camera
         cmds.spawn((
             bevy_headless_render::components::HeadlessRenderSource::new(
                 &asset_server,
@@ -45,7 +52,21 @@ pub fn virtual_camera_start() {
                 target: image_handle.into(),
                 ..default()
             },
+            Transform::from_xyz(-1.0, 1.0, 0.0)
+                .looking_at(Vec3::new(5.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
         ));
+
+        // Spawn blimp
+        let blimp_mesh = meshes.add(Cuboid::new(1.0, 1.0, 2.5));
+        let blimp_material = materials.add(Color::srgb_u8(255, 128, 0));
+        cmds.spawn((
+            Mesh3d(blimp_mesh),
+            MeshMaterial3d(blimp_material),
+            Transform::from_xyz(5.0, 0.0, 0.0),
+        ));
+
+        //Spawn light
+        cmds.spawn(());
     }
 
     fn update(
