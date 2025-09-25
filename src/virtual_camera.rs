@@ -14,6 +14,9 @@ struct VirtualBlimpData {
     pos: Vec3,
 }
 
+#[derive(Resource)]
+struct BlimpAssetPack(Handle<Gltf>);
+
 #[derive(Component)]
 struct BlimpComponent;
 
@@ -21,6 +24,7 @@ pub fn virtual_camera_start() {
     fn setup(
         mut cmds: Commands,
         asset_server: ResMut<AssetServer>,
+        assets_gltf: Res<Assets<Gltf>>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<StandardMaterial>>,
     ) {
@@ -49,6 +53,10 @@ pub fn virtual_camera_start() {
 
         let image_handle = asset_server.add(dest_image);
 
+        // Load glTF models
+        let blimp_gltf_asset = asset_server.load("blimp.glb");
+        let blimp_gltf: &Gltf = assets_gltf.get(&blimp_gltf_asset).unwrap();
+
         // Spawn camera
         cmds.spawn((
             bevy_headless_render::components::HeadlessRenderSource::new(
@@ -69,8 +77,7 @@ pub fn virtual_camera_start() {
         let blimp_material = materials.add(Color::srgb_u8(192, 255, 128));
         cmds.spawn((
             BlimpComponent,
-            Mesh3d(blimp_mesh),
-            MeshMaterial3d(blimp_material),
+            SceneRoot(blimp_gltf.scenes[0].clone()),
             Transform::from_xyz(5.0, 0.0, 0.0),
         ));
 
