@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use std::io::Write;
-use crate::render::DEBUG_RENDER;
+use crate::simulation::setup;
 
 #[derive(Resource)]
 struct FfmpegProcess(std::process::Child);
@@ -78,8 +78,7 @@ fn setup_headless_render(
             target: image_handle.into(),
             ..default()
         },
-        Transform::from_xyz(0.0, 2.5, -2.0)
-            .looking_at(Vec3::new(5.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
+        Transform::default()
     ));
 }
 pub fn apply_headless_config(mut app: &mut App, ffplay: bool, debug: bool) {
@@ -143,5 +142,5 @@ pub fn apply_headless_config(mut app: &mut App, ffplay: bool, debug: bool) {
             ..default()
         }
     ));
-    app.add_systems(Startup, setup_headless_render);
+    app.add_systems(Startup, setup_headless_render.before(setup::setup));
 }
