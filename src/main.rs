@@ -1,20 +1,21 @@
-mod virtual_camera;
+mod render;
 mod websocket;
+mod app;
 
 use tokio;
 
-use crate::virtual_camera::virtual_camera_start;
 use crate::websocket::handle_ground_ws_connection;
 use blimp_ground_ws_interface::BlimpGroundWebsocketServer;
+use crate::app::get_app;
 
 fn main() {
-    std::thread::spawn(|| {
-        tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(async_main());
-    });
-
-    virtual_camera_start();
+    // std::thread::spawn(|| {
+    //     tokio::runtime::Runtime::new()
+    //         .unwrap()
+    //         .block_on(async_main());
+    // });
+    let mut app = get_app();
+    app.run();
 }
 
 async fn async_main() {
