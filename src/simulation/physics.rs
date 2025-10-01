@@ -20,9 +20,9 @@ pub fn sync_transform(
 ) {
     for (mut transform, rb) in query.iter_mut() {
         transform.translation = Vec3::from_array(rb.body.pos.into());
-        // transform.rotation = Quat::from_mat3(
-        //     &Mat3::from_cols_array_2d(&rb.body.rot_mat.into())
-        // );
+        transform.rotation = Quat::from_mat3(
+            &Mat3::from_cols_array_2d(&rb.body.rot_mat.into())
+        );
     }
 }
 

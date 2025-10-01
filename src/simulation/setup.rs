@@ -19,7 +19,7 @@ pub fn setup(
         RigidBody{body: physsim::RigidBody {
             pos: nalgebra::Vector3::new(5.0, 0.0, 0.0),
             lin_vel: nalgebra::Vector3::zeros(),
-            rot_mat: nalgebra::Matrix3::zeros(),
+            rot_mat: nalgebra::Matrix3::new(0.0, 0.0, 1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0),
             ang_mom: nalgebra::Vector3::zeros(),
             inv_ine: nalgebra::Matrix3::new(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
             mass: 1.0
@@ -46,7 +46,7 @@ pub fn setup(
         MeshMaterial3d(floor_material),
         Transform::from_xyz(0.0,-10.0, 0.0)
     ));
-    
+
     // Camera
     let mut transform = camera_transform.get_single_mut().expect("Camera not found");
     *transform = Transform::from_xyz(0.0, 2.5, 5.0)
