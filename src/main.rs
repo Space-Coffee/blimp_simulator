@@ -1,6 +1,7 @@
-mod render;
 mod websocket;
 mod app;
+mod simulation;
+mod render;
 
 use tokio;
 

@@ -1,17 +1,6 @@
-use std::cmp::PartialEq;
-use std::io::Write;
-
 use bevy::prelude::*;
-use bevy_headless_render;
-
-enum DisplayMode {
-    Ffplay,
-    Stream,
-    Window
-}
-
-const DEBUG_RENDER: bool = false;
-const DISPLAY_MODE: DisplayMode = DisplayMode::Window;
+use std::io::Write;
+use crate::render::DEBUG_RENDER;
 
 #[derive(Resource)]
 struct FfmpegProcess(std::process::Child);
@@ -25,23 +14,31 @@ fn render_ffmpeg(
     let dest = dest.single().0.clone();
     let dest = dest.lock().unwrap();
 
-    if DEBUG_RENDER {
-        let mut fake_data = Vec::new();
-        fake_data.resize(dest.data.len(), 0);
-        let mut counter: u8 = 0;
-        for b in &mut fake_data {
-            *b = counter;
-            counter = counter.wrapping_add(1);
-        }
-        ffmpeg_stdin
-            .write_all(&fake_data)
-            .expect("Failed to send video data to ffmpeg");
-    } else {
-        ffmpeg_stdin
-            .write_all(&dest.data)
-            .expect("Failed to send video data to ffmpeg");
-    }
+    ffmpeg_stdin
+        .write_all(&dest.data)
+        .expect("Failed to send video data to ffmpeg");
 }
+
+fn render_ffmpeg_debug(
+    dest: Query<&bevy_headless_render::components::HeadlessRenderDestination>,
+    ffmpeg: ResMut<FfmpegProcess>,
+) {
+    let mut ffmpeg_stdin = ffmpeg.0.stdin.as_ref().expect("Failed to get ffmpeg stdin");
+    let dest = dest.single().0.clone();
+    let dest = dest.lock().unwrap();
+
+    let mut fake_data = Vec::new();
+    fake_data.resize(dest.data.len(), 0);
+    let mut counter: u8 = 0;
+    for b in &mut fake_data {
+        *b = counter;
+        counter = counter.wrapping_add(1);
+    }
+    ffmpeg_stdin
+        .write_all(&fake_data)
+        .expect("Failed to send video data to ffmpeg");
+}
+
 fn setup_headless_render(
     mut cmds: Commands,
     asset_server: ResMut<AssetServer>,
@@ -85,25 +82,7 @@ fn setup_headless_render(
             .looking_at(Vec3::new(5.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
     ));
 }
-
-fn setup_windowed_render(
-    mut cmds: Commands
-) {
-    cmds.spawn((
-        Camera3d::default(),
-        Camera::default(),
-        Transform::from_xyz(0.0, 2.5, -2.0)
-            .looking_at(Vec3::new(5.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
-    ));
-    
-}
-
-pub fn apply_windowed_config(mut app: &mut App) {
-    app.add_plugins(WindowPlugin::default());
-    app.add_systems(Startup, setup_windowed_render);
-}
-
-pub fn apply_headless_config(mut app: &mut App, ffplay: bool) {
+pub fn apply_headless_config(mut app: &mut App, ffplay: bool, debug: bool) {
     let mut args = Vec::<String>::new();
     args.extend_from_slice(
         &[
@@ -149,9 +128,13 @@ pub fn apply_headless_config(mut app: &mut App, ffplay: bool) {
         .stdin(std::process::Stdio::piped())
         .spawn()
         .expect("Couldn't start ffmpeg");
-    
+
     app.insert_resource(FfmpegProcess(ffmpeg));
-    app.add_systems(PostUpdate, render_ffmpeg);
+    if debug {
+        app.add_systems(PostUpdate, render_ffmpeg_debug);
+    } else {
+        app.add_systems(PostUpdate, render_ffmpeg);
+    }
     app.add_plugins((
         bevy_headless_render::HeadlessRenderPlugin,
         WindowPlugin {
@@ -161,12 +144,4 @@ pub fn apply_headless_config(mut app: &mut App, ffplay: bool) {
         }
     ));
     app.add_systems(Startup, setup_headless_render);
-}
-
-pub fn register_rendering_systems(app: &mut App) {
-    match DISPLAY_MODE {
-        DisplayMode::Window => apply_windowed_config(app),
-        DisplayMode::Stream => apply_headless_config(app, false),
-        DisplayMode::Ffplay => apply_headless_config(app, true)
-    }
 }
