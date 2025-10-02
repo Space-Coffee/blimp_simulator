@@ -3,6 +3,7 @@ pub mod setup;
 
 use bevy::app::{App, Plugin, Startup};
 use bevy::prelude::*;
+
 use crate::simulation::physics::PhysicsPlugin;
 
 pub struct BlimpSimulationPlugin {}
