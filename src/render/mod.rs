@@ -1,14 +1,14 @@
 mod headless;
 mod windowed;
 
-use bevy::prelude::*;
 use crate::render::headless::apply_headless_config;
 use crate::render::windowed::apply_windowed_config;
+use bevy::prelude::*;
 
 enum DisplayMode {
     Ffplay,
     Stream,
-    Window
+    Window,
 }
 
 const DEBUG_RENDER: bool = false;
@@ -21,7 +21,7 @@ impl Plugin for CustomRendererPlugin {
         match DISPLAY_MODE {
             DisplayMode::Window => apply_windowed_config(app),
             DisplayMode::Stream => apply_headless_config(app, false, DEBUG_RENDER),
-            DisplayMode::Ffplay => apply_headless_config(app, true, DEBUG_RENDER)
+            DisplayMode::Ffplay => apply_headless_config(app, true, DEBUG_RENDER),
         }
     }
 }

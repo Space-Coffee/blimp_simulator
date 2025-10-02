@@ -1,10 +1,9 @@
+use crate::simulation::setup;
 use bevy::prelude::*;
 use std::io::Write;
-use crate::simulation::setup;
 
 #[derive(Resource)]
 struct FfmpegProcess(std::process::Child);
-
 
 fn render_ffmpeg(
     dest: Query<&bevy_headless_render::components::HeadlessRenderDestination>,
@@ -39,10 +38,7 @@ fn render_ffmpeg_debug(
         .expect("Failed to send video data to ffmpeg");
 }
 
-fn setup_headless_render(
-    mut cmds: Commands,
-    asset_server: ResMut<AssetServer>,
-) {
+fn setup_headless_render(mut cmds: Commands, asset_server: ResMut<AssetServer>) {
     let size = bevy::render::render_resource::Extent3d {
         width: 640,
         height: 480,
@@ -78,7 +74,7 @@ fn setup_headless_render(
             target: image_handle.into(),
             ..default()
         },
-        Transform::default()
+        Transform::default(),
     ));
 }
 pub fn apply_headless_config(mut app: &mut App, ffplay: bool, debug: bool) {
@@ -98,7 +94,7 @@ pub fn apply_headless_config(mut app: &mut App, ffplay: bool, debug: bool) {
             "-use_wallclock_as_timestamps",
             "1",
         ]
-            .map(|s| s.to_owned()),
+        .map(|s| s.to_owned()),
     );
     if !ffplay {
         args.push("-i".to_owned());
@@ -119,7 +115,7 @@ pub fn apply_headless_config(mut app: &mut App, ffplay: bool, debug: bool) {
                 "tcp",
                 "rtsp://127.0.0.1:8554/virtual",
             ]
-                .map(|s| s.to_owned()),
+            .map(|s| s.to_owned()),
         );
     }
     let ffmpeg = std::process::Command::new(if ffplay { "ffplay" } else { "ffmpeg" })
@@ -140,7 +136,7 @@ pub fn apply_headless_config(mut app: &mut App, ffplay: bool, debug: bool) {
             primary_window: None,
             exit_condition: bevy::window::ExitCondition::DontExit,
             ..default()
-        }
+        },
     ));
     app.add_systems(Startup, setup_headless_render.before(setup::setup));
 }
