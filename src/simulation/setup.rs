@@ -1,9 +1,11 @@
 use bevy::asset::{AssetServer, Assets};
 use bevy::color::Color;
+use bevy::gltf::GltfAssetLabel;
 use bevy::math::{Vec2, Vec3};
-use bevy::pbr::{MeshMaterial3d, PointLight, StandardMaterial};
+use bevy::pbr::{DirectionalLight, MeshMaterial3d, StandardMaterial};
 use bevy::prelude::{
-    default, Camera, Commands, Cuboid, Mesh, Mesh3d, Plane3d, Query, Res, ResMut, Transform, With,
+    default, Camera, Commands, Mesh, Mesh3d, Plane3d, Query, Res, ResMut, SceneRoot, Transform,
+    With,
 };
 
 use crate::simulation::physics::RigidBody;
@@ -16,8 +18,8 @@ pub fn setup(
     asset_server: Res<AssetServer>,
 ) {
     // Spawn blimp
-    let blimp_mesh = meshes.add(Cuboid::new(1.0, 1.0, 2.5));
-    let blimp_material = materials.add(Color::srgb_u8(192, 255, 128));
+    // let blimp_mesh = meshes.add(Cuboid::new(1.0, 1.0, 2.5));
+    // let blimp_material = materials.add(Color::srgb_u8(192, 255, 128));
     cmds.spawn((
         RigidBody {
             body: physsim::RigidBody {
@@ -29,19 +31,22 @@ pub fn setup(
                 mass: 1.0,
             },
         },
-        Mesh3d(blimp_mesh),
-        MeshMaterial3d(blimp_material),
+        // Mesh3d(blimp_mesh),
+        // MeshMaterial3d(blimp_material),
+        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("blimp.glb"))),
         Transform::from_xyz(5.0, 0.0, 0.0),
     ));
 
     //Spawn light
     cmds.spawn((
-        PointLight {
+        DirectionalLight {
             color: Color::srgb_u8(255, 255, 255),
+            illuminance: 10000.0,
             shadows_enabled: true,
             ..default()
         },
-        Transform::from_xyz(0.0, 0.0, 0.0),
+        Transform::from_xyz(0.0, 100.0, 0.0)
+            .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
     ));
     // Floor
     let floor_mesh = meshes.add(Plane3d::new(
@@ -60,4 +65,3 @@ pub fn setup(
     *transform = Transform::from_xyz(0.0, 2.5, 5.0)
         .looking_at(Vec3::new(3.0, -1.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
 }
-

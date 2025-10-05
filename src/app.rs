@@ -49,10 +49,12 @@ pub fn get_app() -> App {
         bevy::state::app::StatesPlugin,
         DefaultPickingPlugins,
     ))
+    .register_type::<bevy::hierarchy::Children>()
+    .register_type::<bevy::hierarchy::Parent>()
+    .register_type::<bevy::core::Name>()
     .insert_resource(Events::<bevy::window::WindowResized>::default())
     .add_plugins(CustomRendererPlugin {})
     .add_plugins(BlimpSimulationPlugin {});
 
     app
 }
-
