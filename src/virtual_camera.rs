@@ -73,28 +73,22 @@ pub fn virtual_camera_start() {
         ));
 
         // Spawn blimp
-        // let blimp_mesh = meshes.add(Cuboid::new(1.0, 1.0, 2.5));
-        // let blimp_material = materials.add(Color::srgb_u8(192, 255, 128));
         cmds.spawn((
             BlimpComponent,
-            // DynamicSceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("blimp.glb"))),
-            // SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("blimp.glb"))),
-            // Mesh3d(asset_server.load(GltfAssetLabel::Mesh(0).from_asset("blimp.glb"))),
+            SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("blimp.glb"))),
             Transform::from_xyz(5.0, 0.0, 0.0),
-        ));
-
-        cmds.spawn(SceneRoot(
-            asset_server.load(GltfAssetLabel::Scene(0).from_asset("blimp.glb")),
         ));
 
         //Spawn light
         cmds.spawn((
-            PointLight {
+            DirectionalLight {
                 color: Color::srgb_u8(255, 255, 255),
+                illuminance: 10000.0,
                 shadows_enabled: true,
                 ..default()
             },
-            Transform::from_xyz(0.0, 15.0, 0.0),
+            Transform::from_xyz(0.0, 15.0, 0.0)
+                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
         ));
     }
 
@@ -132,7 +126,7 @@ pub fn virtual_camera_start() {
         let mut blimp = blimp.single_mut();
         let virtual_blimp_data = virtual_blimp_data.as_mut();
         virtual_blimp_data.pos += (Vec3::new(0.0, 0.0, 1.0)
-            * ((time.elapsed_secs() * 5.0).sin() * 0.8 + 0.05))
+            * ((time.elapsed_secs() * 5.0).sin() * 4.0 + 0.05))
             * time.delta_secs();
         *blimp = Transform::from_translation(virtual_blimp_data.pos);
     }
