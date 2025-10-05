@@ -54,8 +54,8 @@ pub fn virtual_camera_start() {
         let image_handle = asset_server.add(dest_image);
 
         // Load glTF models
-        let blimp_gltf_asset = asset_server.load("blimp.glb");
-        let blimp_gltf: &Gltf = assets_gltf.get(&blimp_gltf_asset).unwrap();
+        // let blimp_gltf_asset = asset_server.load("blimp.glb");
+        // let blimp_gltf: &Gltf = assets_gltf.get(&blimp_gltf_asset).unwrap();
 
         // Spawn camera
         cmds.spawn((
@@ -68,17 +68,23 @@ pub fn virtual_camera_start() {
                 target: image_handle.into(),
                 ..default()
             },
-            Transform::from_xyz(0.0, 2.5, -2.0)
-                .looking_at(Vec3::new(5.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
+            Transform::from_xyz(0.0, 10.0, -8.0)
+                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
         ));
 
         // Spawn blimp
-        let blimp_mesh = meshes.add(Cuboid::new(1.0, 1.0, 2.5));
-        let blimp_material = materials.add(Color::srgb_u8(192, 255, 128));
+        // let blimp_mesh = meshes.add(Cuboid::new(1.0, 1.0, 2.5));
+        // let blimp_material = materials.add(Color::srgb_u8(192, 255, 128));
         cmds.spawn((
             BlimpComponent,
-            SceneRoot(blimp_gltf.scenes[0].clone()),
+            // DynamicSceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("blimp.glb"))),
+            // SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("blimp.glb"))),
+            // Mesh3d(asset_server.load(GltfAssetLabel::Mesh(0).from_asset("blimp.glb"))),
             Transform::from_xyz(5.0, 0.0, 0.0),
+        ));
+
+        cmds.spawn(SceneRoot(
+            asset_server.load(GltfAssetLabel::Scene(0).from_asset("blimp.glb")),
         ));
 
         //Spawn light
@@ -88,7 +94,7 @@ pub fn virtual_camera_start() {
                 shadows_enabled: true,
                 ..default()
             },
-            Transform::from_xyz(0.0, 0.0, 0.0),
+            Transform::from_xyz(0.0, 15.0, 0.0),
         ));
     }
 
@@ -223,6 +229,9 @@ pub fn virtual_camera_start() {
             DefaultPickingPlugins,
             bevy_headless_render::HeadlessRenderPlugin,
         ))
+        .register_type::<bevy::hierarchy::Children>()
+        .register_type::<bevy::hierarchy::Parent>()
+        .register_type::<bevy::core::Name>()
         .add_systems(Startup, setup)
         .add_systems(PostUpdate, update_rendering)
         .add_systems(FixedUpdate, update_blimp)
