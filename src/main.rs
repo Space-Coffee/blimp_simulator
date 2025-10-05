@@ -1,20 +1,21 @@
-mod websocket;
 mod app;
-mod simulation;
+mod onboard_execution;
 mod render;
+mod simulation;
+mod websocket;
 
 use tokio;
 
+use crate::app::get_app;
 use crate::websocket::handle_ground_ws_connection;
 use blimp_ground_ws_interface::BlimpGroundWebsocketServer;
-use crate::app::get_app;
 
 fn main() {
-    // std::thread::spawn(|| {
-    //     tokio::runtime::Runtime::new()
-    //         .unwrap()
-    //         .block_on(async_main());
-    // });
+    std::thread::spawn(|| {
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async_main());
+    });
     let mut app = get_app();
     app.run();
 }
