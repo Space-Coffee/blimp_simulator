@@ -20,10 +20,11 @@ pub fn setup(
     // Spawn blimp
     // let blimp_mesh = meshes.add(Cuboid::new(1.0, 1.0, 2.5));
     // let blimp_material = materials.add(Color::srgb_u8(192, 255, 128));
+    let blimp_pos = nalgebra::Vector3::new(0.0, 5.0, 0.0);
     cmds.spawn((
         RigidBody {
             body: physsim::RigidBody {
-                pos: nalgebra::Vector3::new(5.0, 0.0, 0.0),
+                pos: blimp_pos,
                 lin_vel: nalgebra::Vector3::zeros(),
                 rot_mat: nalgebra::Matrix3::new(0.0, 0.0, 1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0),
                 ang_mom: nalgebra::Vector3::zeros(),
@@ -34,7 +35,7 @@ pub fn setup(
         // Mesh3d(blimp_mesh),
         // MeshMaterial3d(blimp_material),
         SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("blimp.glb"))),
-        Transform::from_xyz(5.0, 0.0, 0.0),
+        Transform::from_xyz(blimp_pos.x, blimp_pos.y, blimp_pos.z),
     ));
 
     //Spawn light
@@ -45,7 +46,7 @@ pub fn setup(
             shadows_enabled: true,
             ..default()
         },
-        Transform::from_xyz(0.0, 100.0, 0.0)
+        Transform::from_xyz(10.0, 100.0, 5.0)
             .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
     ));
     // Floor
@@ -62,6 +63,6 @@ pub fn setup(
 
     // Camera
     let mut transform = camera_transform.get_single_mut().expect("Camera not found");
-    *transform = Transform::from_xyz(0.0, 2.5, 5.0)
-        .looking_at(Vec3::new(3.0, -1.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+    *transform = Transform::from_xyz(4.0, 8.0, 16.0)
+        .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
 }

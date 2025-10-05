@@ -1,4 +1,7 @@
-use bevy::prelude::*;
+use bevy::prelude::{
+    App, Component, FixedUpdate, IntoSystemConfigs, Mat3, Plugin, Quat, Query, Res, Time,
+    Transform, Vec3,
+};
 use nalgebra;
 
 pub struct PhysicsPlugin;
@@ -22,17 +25,19 @@ pub fn sync_transform(mut query: Query<(&mut Transform, &RigidBody)>) {
     }
 }
 
-pub fn tick_rigid_body(mut query: Query<&mut RigidBody>) {
+pub fn tick_rigid_body(mut query: Query<&mut RigidBody>, time: Res<Time>) {
     for mut body in query.iter_mut() {
-        body.body.step_sim(0.1);
+        body.body.step_sim(time.delta_secs());
     }
 }
 
-pub fn apply_gravity(mut query: Query<&mut RigidBody>) {
+pub fn apply_gravity(mut query: Query<&mut RigidBody>, time: Res<Time>) {
     for mut body in query.iter_mut() {
         let position = nalgebra::Vector3::new(body.body.pos.x, body.body.pos.y, body.body.pos.z);
-        body.body
-            .apply_force_at(nalgebra::Vector3::new(0.0, -0.01, 0.0), 0.1, position);
+        body.body.apply_force_at(
+            nalgebra::Vector3::new(0.0, -0.1, 0.0),
+            time.delta_secs(),
+            position,
+        );
     }
 }
-
