@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio;
 
 use blimp_onboard_software::obsw_algo::{
-    BlimpAction, BlimpMainAlgo, BlimpState, MessageB2G, MessageG2B, SensorType,
+    BlimpAction, BlimpEvent, BlimpMainAlgo, BlimpState, MessageB2G, MessageG2B, SensorType,
 };
 use blimp_onboard_software::obsw_interface::BlimpAlgorithm;
 
@@ -20,35 +20,70 @@ pub enum OnboardSimEvent {
 pub async fn start_onboard() -> (
     tokio::sync::mpsc::Sender<MessageG2B>,
     tokio::sync::broadcast::Sender<OnboardSimEvent>,
+    tokio::sync::watch::Receiver<([f32; 4], [f32; 12])>,
 ) {
-    let (messages_g2b_tx, messages_g2b_rx) = tokio::sync::mpsc::channel::<MessageG2B>(64);
+    let (messages_g2b_tx, mut messages_g2b_rx) = tokio::sync::mpsc::channel::<MessageG2B>(64);
     let (events_tx, _) = tokio::sync::broadcast::channel::<OnboardSimEvent>(64);
+    let (motors_servos_tx, motors_servos_rx) =
+        tokio::sync::watch::channel::<([f32; 4], [f32; 12])>(([0.0; 4], [0.0; 12]));
 
     let action_callback: Arc<
         dyn Fn(BlimpAction) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
     > = Arc::new(move |action| {
+        let motors_servos_tx = motors_servos_tx.clone();
         Box::pin(async move {
             match action {
                 BlimpAction::SendMsg(msg) => {
                     // println!("Got message:\n{:#?}", msg);
+                    match msg.as_ref() {
+                        MessageB2G::Ping(_) => {}
+                        MessageB2G::Pong(_) => {}
+                        MessageB2G::ForwardAction(blimp_action) => {}
+                        MessageB2G::ForwardEvent(blimp_event) => {}
+                        MessageB2G::BlimpState(blimp_state) => {}
+                    }
                 }
-                BlimpAction::SetServo { servo, location } => {}
-                BlimpAction::SetMotor { motor, speed } => {}
+                BlimpAction::SetServo { servo, location } => {
+                    motors_servos_tx.send_modify(move |prev| {
+                        prev.1[servo as usize] = location;
+                    });
+                }
+                BlimpAction::SetMotor { motor, speed } => {
+                    motors_servos_tx.send_modify(move |prev| {
+                        prev.0[motor as usize] = speed;
+                    });
+                }
                 BlimpAction::NavLights(_) => {}
             }
         })
     });
 
-    tokio::spawn(async move {
-        let blimp_algo = BlimpMainAlgo::new();
-        blimp_algo.set_action_callback(action_callback).await;
-        loop {
-            println!("Stepping...");
-            blimp_algo.step().await;
+    // Execute blimp's main algorithm
+    let blimp_algo = Arc::new(BlimpMainAlgo::new());
+    {
+        let blimp_algo = blimp_algo.clone();
+        tokio::spawn(async move {
+            blimp_algo.set_action_callback(action_callback).await;
+            loop {
+                println!("Stepping...");
+                blimp_algo.step().await;
 
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        });
+    }
+
+    tokio::spawn(async move {
+        loop {
+            let msg = messages_g2b_rx.recv().await;
+            if let Some(msg) = msg {
+                blimp_algo
+                    .clone()
+                    .handle_event(BlimpEvent::GetMsg(msg))
+                    .await;
+            }
         }
     });
 
-    (messages_g2b_tx, events_tx)
+    (messages_g2b_tx, events_tx, motors_servos_rx)
 }
