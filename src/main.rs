@@ -7,6 +7,7 @@ mod websocket;
 use tokio;
 
 use crate::app::get_app;
+use crate::onboard_execution::start_onboard;
 use crate::websocket::handle_ground_ws_connection;
 use blimp_ground_ws_interface::BlimpGroundWebsocketServer;
 
@@ -32,6 +33,8 @@ async fn async_main() {
     });
 
     println!("Hello, world!");
+
+    start_onboard().await;
 
     tokio::signal::ctrl_c().await.unwrap();
     server_task.abort();
