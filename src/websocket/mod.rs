@@ -2,6 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use serde_json;
 use tokio;
 use tokio::sync::{broadcast, mpsc, watch, Mutex as TMutex};
 
@@ -31,6 +32,60 @@ pub fn handle_ground_ws_connection(
                 tokio::spawn(async move {
                     loop {
                         if let Ok(msg) = messages_b2g_rx.recv().await {
+                            match msg {
+                                MessageB2G::Ping(_) => {}
+                                MessageB2G::Pong(_) => {}
+                                MessageB2G::ForwardAction(blimp_action) => match blimp_action {
+                                    obsw_algo::BlimpAction::SetServo { servo, location } => {
+                                        if interest_rx.borrow().servos {
+                                            stream_pair
+                                                .send(MessageG2V::ServoPosition {
+                                                    id: servo,
+                                                    angle: location,
+                                                })
+                                                .await
+                                                .unwrap();
+                                        }
+                                    }
+                                    obsw_algo::BlimpAction::SetMotor { motor, speed } => {
+                                        if interest_rx.borrow().motors {
+                                            stream_pair
+                                                .send(MessageG2V::MotorSpeed { id: motor, speed })
+                                                .await
+                                                .unwrap();
+                                        }
+                                    }
+                                    obsw_algo::BlimpAction::SendMsg(_) => {}
+                                    obsw_algo::BlimpAction::NavLights(_) => {}
+                                },
+                                MessageB2G::ForwardEvent(blimp_event) => match blimp_event {
+                                    obsw_algo::BlimpEvent::Control(_) => {}
+                                    obsw_algo::BlimpEvent::GetMsg(_) => {}
+                                    obsw_algo::BlimpEvent::SensorDataF64(
+                                        sensor_type,
+                                        sensor_data,
+                                    ) => {
+                                        if interest_rx.borrow().sensors {
+                                            stream_pair
+                                                .send(MessageG2V::SensorData {
+                                                    id: serde_json::to_string(&sensor_type)
+                                                        .unwrap(),
+                                                    data: sensor_data,
+                                                })
+                                                .await
+                                                .unwrap();
+                                        }
+                                    }
+                                },
+                                MessageB2G::BlimpState(blimp_state) => {
+                                    if interest_rx.borrow().state {
+                                        stream_pair
+                                            .send(MessageG2V::State(blimp_state))
+                                            .await
+                                            .unwrap();
+                                    }
+                                }
+                            }
                         } else {
                             eprintln!("Couldn't receive B2G message!");
                             break;

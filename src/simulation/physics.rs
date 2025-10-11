@@ -61,6 +61,16 @@ pub fn blimp_drive(
             );
             let pos_with_offset = pos + &(&body.body.rot_mat * &motor_pos_rel);
             let force = body.body.rot_mat
+                * nalgebra::Rotation3::from_euler_angles(
+                    0.0,
+                    motors_servos_state.1[2 * i] * std::f32::consts::PI / 180.0,
+                    0.0,
+                )
+                * nalgebra::Rotation3::from_euler_angles(
+                    0.0,
+                    0.0,
+                    motors_servos_state.1[2 * i + 1] * std::f32::consts::PI / 180.0,
+                )
                 * nalgebra::Vector3::new(0.0, 0.0, 1.0 * motors_servos_state.0[i]);
             body.body
                 .apply_force_at(force, time.delta_secs(), pos_with_offset);
