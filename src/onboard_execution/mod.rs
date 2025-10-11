@@ -19,44 +19,52 @@ pub enum OnboardSimEvent {
 
 pub async fn start_onboard() -> (
     tokio::sync::mpsc::Sender<MessageG2B>,
-    tokio::sync::broadcast::Sender<OnboardSimEvent>,
+    tokio::sync::broadcast::Sender<MessageB2G>,
+    // tokio::sync::broadcast::Sender<OnboardSimEvent>,
     tokio::sync::watch::Receiver<([f32; 4], [f32; 12])>,
 ) {
     let (messages_g2b_tx, mut messages_g2b_rx) = tokio::sync::mpsc::channel::<MessageG2B>(64);
-    let (events_tx, _) = tokio::sync::broadcast::channel::<OnboardSimEvent>(64);
+    let (messages_b2g_tx, _) = tokio::sync::broadcast::channel::<MessageB2G>(64);
+    // let (events_tx, _) = tokio::sync::broadcast::channel::<OnboardSimEvent>(64);
     let (motors_servos_tx, motors_servos_rx) =
         tokio::sync::watch::channel::<([f32; 4], [f32; 12])>(([0.0; 4], [0.0; 12]));
 
     let action_callback: Arc<
         dyn Fn(BlimpAction) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
-    > = Arc::new(move |action| {
+    > = {
         let motors_servos_tx = motors_servos_tx.clone();
-        Box::pin(async move {
-            match action {
-                BlimpAction::SendMsg(msg) => {
-                    // println!("Got message:\n{:#?}", msg);
-                    match msg.as_ref() {
-                        MessageB2G::Ping(_) => {}
-                        MessageB2G::Pong(_) => {}
-                        MessageB2G::ForwardAction(blimp_action) => {}
-                        MessageB2G::ForwardEvent(blimp_event) => {}
-                        MessageB2G::BlimpState(blimp_state) => {}
+        let messages_b2g_tx = messages_b2g_tx.clone();
+        Arc::new(move |action| {
+            let motors_servos_tx = motors_servos_tx.clone();
+            let messages_b2g_tx = messages_b2g_tx.clone();
+            Box::pin(async move {
+                match action {
+                    BlimpAction::SendMsg(msg) => {
+                        // println!("Got message:\n{:#?}", msg);
+                        match msg.as_ref() {
+                            MessageB2G::Ping(_) => {}
+                            MessageB2G::Pong(_) => {}
+                            MessageB2G::ForwardAction(blimp_action) => {}
+                            MessageB2G::ForwardEvent(blimp_event) => {}
+                            MessageB2G::BlimpState(blimp_state) => {}
+                        }
+                        messages_b2g_tx.send(msg.as_ref().clone()).unwrap();
                     }
+                    BlimpAction::SetServo { servo, location } => {
+                        motors_servos_tx.send_modify(move |prev| {
+                            prev.1[servo as usize] = location;
+                        });
+                    }
+                    BlimpAction::SetMotor { motor, speed } => {
+                        motors_servos_tx.send_modify(move |prev| {
+                            prev.0[motor as usize] = speed;
+                        });
+                    }
+                    BlimpAction::NavLights(_) => {}
                 }
-                BlimpAction::SetServo { servo, location } => {
-                    motors_servos_tx.send_modify(move |prev| {
-                        prev.1[servo as usize] = location;
-                    });
-                }
-                BlimpAction::SetMotor { motor, speed } => {
-                    motors_servos_tx.send_modify(move |prev| {
-                        prev.0[motor as usize] = speed;
-                    });
-                }
-                BlimpAction::NavLights(_) => {}
-            }
+            })
         })
-    });
+    };
 
     // Execute blimp's main algorithm
     let blimp_algo = Arc::new(BlimpMainAlgo::new());
@@ -85,5 +93,10 @@ pub async fn start_onboard() -> (
         }
     });
 
-    (messages_g2b_tx, events_tx, motors_servos_rx)
+    (
+        messages_g2b_tx,
+        messages_b2g_tx,
+        // events_tx,
+        motors_servos_rx,
+    )
 }

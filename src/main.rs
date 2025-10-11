@@ -22,19 +22,22 @@ fn main() {
 }
 
 async fn async_main() {
+    let (messages_g2b_tx, messages_b2g_tx, /*events_tx,*/ motors_servos_rx) = start_onboard().await;
+
     // WebSocket server for visualizations, etc.
     let mut ws_server = BlimpGroundWebsocketServer::new("127.0.0.1:8765");
     ws_server.bind().await.expect("Failed to bind WS server");
     let server_task = tokio::spawn(async move {
         ws_server
-            .run(handle_ground_ws_connection())
+            .run(handle_ground_ws_connection(
+                messages_g2b_tx,
+                messages_b2g_tx,
+            ))
             .await
             .expect("Error occurred while running WS server");
     });
 
     println!("Hello, world!");
-
-    start_onboard().await;
 
     tokio::signal::ctrl_c().await.unwrap();
     server_task.abort();
