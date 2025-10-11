@@ -22,12 +22,14 @@ pub async fn start_onboard() -> (
     tokio::sync::broadcast::Sender<MessageB2G>,
     // tokio::sync::broadcast::Sender<OnboardSimEvent>,
     tokio::sync::watch::Receiver<([f32; 4], [f32; 12])>,
+    tokio::sync::mpsc::Sender<(SensorType, f64)>,
 ) {
     let (messages_g2b_tx, mut messages_g2b_rx) = tokio::sync::mpsc::channel::<MessageG2B>(64);
     let (messages_b2g_tx, _) = tokio::sync::broadcast::channel::<MessageB2G>(64);
     // let (events_tx, _) = tokio::sync::broadcast::channel::<OnboardSimEvent>(64);
     let (motors_servos_tx, motors_servos_rx) =
         tokio::sync::watch::channel::<([f32; 4], [f32; 12])>(([0.0; 4], [0.0; 12]));
+    let (sensors_tx, mut sensors_rx) = tokio::sync::mpsc::channel::<(SensorType, f64)>(64);
 
     let action_callback: Arc<
         dyn Fn(BlimpAction) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
@@ -81,13 +83,30 @@ pub async fn start_onboard() -> (
         });
     }
 
+    // Pass G2B messages to the algo
+    {
+        let blimp_algo = blimp_algo.clone();
+        tokio::spawn(async move {
+            loop {
+                let msg = messages_g2b_rx.recv().await;
+                if let Some(msg) = msg {
+                    blimp_algo
+                        .clone()
+                        .handle_event(BlimpEvent::GetMsg(msg))
+                        .await;
+                }
+            }
+        });
+    }
+
+    // Pass sensors daat to the algo
     tokio::spawn(async move {
         loop {
-            let msg = messages_g2b_rx.recv().await;
-            if let Some(msg) = msg {
+            let data = sensors_rx.recv().await;
+            if let Some(data) = data {
                 blimp_algo
                     .clone()
-                    .handle_event(BlimpEvent::GetMsg(msg))
+                    .handle_event(BlimpEvent::SensorDataF64(data.0, data.1))
                     .await;
             }
         }
@@ -98,5 +117,6 @@ pub async fn start_onboard() -> (
         messages_b2g_tx,
         // events_tx,
         motors_servos_rx,
+        sensors_tx,
     )
 }

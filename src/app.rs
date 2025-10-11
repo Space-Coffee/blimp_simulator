@@ -10,15 +10,32 @@ use bevy::math::Vec3;
 use bevy::pbr::{MeshMaterial3d, PointLight, StandardMaterial};
 use bevy::picking::DefaultPickingPlugins;
 use bevy::prelude::*;
+use tokio::sync::{oneshot, watch};
 
 use crate::render::CustomRendererPlugin;
 use crate::simulation::BlimpSimulationPlugin;
-use crate::AsyncSyncBridge;
+use crate::{AsyncSyncBridge, SyncAsyncBridge};
 
 #[derive(Resource)]
 pub struct AsyncSyncBridgeRes(pub AsyncSyncBridge);
 
-pub fn get_app(as_bridge_rx: tokio::sync::oneshot::Receiver<AsyncSyncBridge>) -> App {
+#[derive(Resource)]
+pub struct SyncAsyncBridgeRes {
+    pub pos_tx: watch::Sender<(f32, f32, f32)>,
+    pub rot_tx: watch::Sender<(f32, f32, f32)>,
+}
+
+pub fn get_app(
+    as_bridge_rx: oneshot::Receiver<AsyncSyncBridge>,
+    sa_bridge_tx: oneshot::Sender<SyncAsyncBridge>,
+) -> App {
+    let (pos_tx, pos_rx) = watch::channel((0.0, 0.0, 0.0));
+    let (rot_tx, rot_rx) = watch::channel((0.0, 0.0, 0.0));
+    let sa_bridge = SyncAsyncBridge { pos_rx, rot_rx };
+    sa_bridge_tx
+        .send(sa_bridge)
+        .map_err(|_| "Couldn't send sync-async bridge")
+        .unwrap();
     let as_bridge = as_bridge_rx.blocking_recv().unwrap();
 
     let mut app = App::new();
@@ -62,6 +79,7 @@ pub fn get_app(as_bridge_rx: tokio::sync::oneshot::Receiver<AsyncSyncBridge>) ->
     .register_type::<bevy::core::Name>()
     .insert_resource(Events::<bevy::window::WindowResized>::default())
     .insert_resource(AsyncSyncBridgeRes(as_bridge))
+    .insert_resource(SyncAsyncBridgeRes { pos_tx, rot_tx })
     .add_plugins(CustomRendererPlugin {})
     .add_plugins(BlimpSimulationPlugin);
 

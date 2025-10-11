@@ -4,7 +4,7 @@ use bevy::prelude::{
 };
 use nalgebra;
 
-use crate::app::AsyncSyncBridgeRes;
+use crate::app::{AsyncSyncBridgeRes, SyncAsyncBridgeRes};
 use crate::simulation::BlimpComponent;
 
 pub struct PhysicsPlugin;
@@ -14,6 +14,7 @@ impl Plugin for PhysicsPlugin {
         app.add_systems(FixedUpdate, (tick_rigid_body, sync_transform).chain());
         app.add_systems(FixedUpdate, apply_gravity);
         app.add_systems(FixedUpdate, blimp_drive);
+        app.add_systems(FixedUpdate, pass_blimp_sim_data);
     }
 }
 
@@ -51,6 +52,7 @@ pub fn blimp_drive(
     as_bridge: Res<AsyncSyncBridgeRes>,
 ) {
     let motors_servos_state = as_bridge.as_ref().0.motors_servos_rx.borrow();
+    // We should probably use query.single_mut() instead
     for mut body in query.iter_mut() {
         let pos = body.body.pos.clone();
         for i in 0..4 {
@@ -86,4 +88,15 @@ pub fn blimp_drive(
                 .apply_force_at(force, time.delta_secs(), pos_with_offset);
         }
     }
+}
+
+fn pass_blimp_sim_data(
+    query: Query<&RigidBody, With<BlimpComponent>>,
+    sa_bridge: Res<SyncAsyncBridgeRes>,
+) {
+    let body = query.single();
+    sa_bridge
+        .pos_tx
+        .send((body.body.pos.x, body.body.pos.y, body.body.pos.z))
+        .unwrap();
 }
