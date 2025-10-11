@@ -4,11 +4,10 @@ use bevy::prelude::{
 };
 use nalgebra;
 
+use crate::app::AsyncSyncBridgeRes;
 use crate::simulation::BlimpComponent;
 
-pub struct PhysicsPlugin {
-    pub motors_servos_rx: tokio::sync::watch::Receiver<([f32; 4], [f32; 12])>,
-}
+pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
@@ -40,13 +39,18 @@ pub fn apply_gravity(mut query: Query<&mut RigidBody>, time: Res<Time>) {
     for mut body in query.iter_mut() {
         let pos = body.body.pos.clone();
         body.body.apply_force_at(
-            nalgebra::Vector3::new(0.0, -0.1, 0.0),
+            nalgebra::Vector3::new(0.0, -0.01, 0.0),
             time.delta_secs(),
             pos,
         );
     }
 }
-pub fn blimp_drive(mut query: Query<&mut RigidBody, With<BlimpComponent>>, time: Res<Time>) {
+pub fn blimp_drive(
+    mut query: Query<&mut RigidBody, With<BlimpComponent>>,
+    time: Res<Time>,
+    as_bridge: Res<AsyncSyncBridgeRes>,
+) {
+    let motors_servos_state = as_bridge.as_ref().0.motors_servos_rx.borrow();
     for mut body in query.iter_mut() {
         let pos = body.body.pos.clone();
         for i in 0..4 {
@@ -56,7 +60,8 @@ pub fn blimp_drive(mut query: Query<&mut RigidBody, With<BlimpComponent>>, time:
                 if i < 2 { 3.0 } else { -3.0 },
             );
             let pos_with_offset = pos + &(&body.body.rot_mat * &motor_pos_rel);
-            let force = body.body.rot_mat * nalgebra::Vector3::new(0.0, 0.0, 1.0);
+            let force = body.body.rot_mat
+                * nalgebra::Vector3::new(0.0, 0.0, 1.0 * motors_servos_state.0[i]);
             body.body
                 .apply_force_at(force, time.delta_secs(), pos_with_offset);
         }

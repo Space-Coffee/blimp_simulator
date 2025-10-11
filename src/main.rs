@@ -12,7 +12,7 @@ use crate::websocket::handle_ground_ws_connection;
 use blimp_ground_ws_interface::BlimpGroundWebsocketServer;
 
 struct AsyncSyncBridge {
-    motors_servos_rx: tokio::sync::watch::Receiver<([f32; 4], [f32; 12])>,
+    pub motors_servos_rx: tokio::sync::watch::Receiver<([f32; 4], [f32; 12])>,
 }
 
 fn main() {

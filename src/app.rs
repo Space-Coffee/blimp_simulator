@@ -15,6 +15,9 @@ use crate::render::CustomRendererPlugin;
 use crate::simulation::BlimpSimulationPlugin;
 use crate::AsyncSyncBridge;
 
+#[derive(Resource)]
+pub struct AsyncSyncBridgeRes(pub AsyncSyncBridge);
+
 pub fn get_app(as_bridge_rx: tokio::sync::oneshot::Receiver<AsyncSyncBridge>) -> App {
     let as_bridge = as_bridge_rx.blocking_recv().unwrap();
 
@@ -58,10 +61,9 @@ pub fn get_app(as_bridge_rx: tokio::sync::oneshot::Receiver<AsyncSyncBridge>) ->
     .register_type::<bevy::hierarchy::Parent>()
     .register_type::<bevy::core::Name>()
     .insert_resource(Events::<bevy::window::WindowResized>::default())
+    .insert_resource(AsyncSyncBridgeRes(as_bridge))
     .add_plugins(CustomRendererPlugin {})
-    .add_plugins(BlimpSimulationPlugin {
-        motors_servos_rx: Mutex::new(Some(as_bridge.motors_servos_rx)),
-    });
+    .add_plugins(BlimpSimulationPlugin);
 
     app
 }
