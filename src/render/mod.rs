@@ -12,7 +12,7 @@ enum DisplayMode {
 }
 
 const DEBUG_RENDER: bool = false;
-const DISPLAY_MODE: DisplayMode = DisplayMode::Window;
+const DISPLAY_MODE: DisplayMode = DisplayMode::Stream;
 
 pub struct CustomRendererPlugin;
 

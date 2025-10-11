@@ -39,7 +39,7 @@ pub fn apply_gravity(mut query: Query<&mut RigidBody>, time: Res<Time>) {
     for mut body in query.iter_mut() {
         let pos = body.body.pos.clone();
         body.body.apply_force_at(
-            nalgebra::Vector3::new(0.0, -0.01, 0.0),
+            nalgebra::Vector3::new(0.0, -0.001, 0.0),
             time.delta_secs(),
             pos,
         );
@@ -62,16 +62,26 @@ pub fn blimp_drive(
             let pos_with_offset = pos + &(&body.body.rot_mat * &motor_pos_rel);
             let force = body.body.rot_mat
                 * nalgebra::Rotation3::from_euler_angles(
+                    if i % 2 == 0 { 1.0 } else { -1.0 }
+                        * motors_servos_state.1[2 * i]
+                        * std::f32::consts::PI
+                        / 180.0,
                     0.0,
-                    motors_servos_state.1[2 * i] * std::f32::consts::PI / 180.0,
                     0.0,
                 )
                 * nalgebra::Rotation3::from_euler_angles(
                     0.0,
+                    if i % 2 == 0 { 1.0 } else { -1.0 }
+                        * motors_servos_state.1[2 * i + 1]
+                        * std::f32::consts::PI
+                        / 180.0,
                     0.0,
-                    motors_servos_state.1[2 * i + 1] * std::f32::consts::PI / 180.0,
                 )
-                * nalgebra::Vector3::new(0.0, 0.0, 1.0 * motors_servos_state.0[i]);
+                * nalgebra::Vector3::new(
+                    0.25 * if i % 2 == 0 { 1.0 } else { -1.0 } * motors_servos_state.0[i],
+                    0.0,
+                    0.0,
+                );
             body.body
                 .apply_force_at(force, time.delta_secs(), pos_with_offset);
         }

@@ -73,7 +73,7 @@ pub async fn start_onboard() -> (
         tokio::spawn(async move {
             blimp_algo.set_action_callback(action_callback).await;
             loop {
-                println!("Stepping...");
+                // println!("Stepping...");
                 blimp_algo.step().await;
 
                 tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
