@@ -1,15 +1,20 @@
 use bevy::prelude::{
     App, Component, FixedUpdate, IntoSystemConfigs, Mat3, Plugin, Quat, Query, Res, Time,
-    Transform, Vec3,
+    Transform, Vec3, With,
 };
 use nalgebra;
 
-pub struct PhysicsPlugin;
+use crate::simulation::BlimpComponent;
+
+pub struct PhysicsPlugin {
+    pub motors_servos_rx: tokio::sync::watch::Receiver<([f32; 4], [f32; 12])>,
+}
 
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(FixedUpdate, (tick_rigid_body, sync_transform).chain());
         app.add_systems(FixedUpdate, apply_gravity);
+        app.add_systems(FixedUpdate, blimp_drive);
     }
 }
 
@@ -33,11 +38,22 @@ pub fn tick_rigid_body(mut query: Query<&mut RigidBody>, time: Res<Time>) {
 
 pub fn apply_gravity(mut query: Query<&mut RigidBody>, time: Res<Time>) {
     for mut body in query.iter_mut() {
-        let position = nalgebra::Vector3::new(body.body.pos.x, body.body.pos.y, body.body.pos.z);
+        let pos = body.body.pos.clone();
         body.body.apply_force_at(
             nalgebra::Vector3::new(0.0, -0.1, 0.0),
             time.delta_secs(),
-            position,
+            pos,
+        );
+    }
+}
+pub fn blimp_drive(mut query: Query<&mut RigidBody, With<BlimpComponent>>, time: Res<Time>) {
+    for mut body in query.iter_mut() {
+        let pos = body.body.pos.clone();
+        let pos_with_offset = pos + &(&body.body.rot_mat * &nalgebra::Vector3::new(2.0, 0.0, 0.0));
+        body.body.apply_force_at(
+            nalgebra::Vector3::new(0.0, 0.0, 0.1),
+            time.delta_secs(),
+            pos_with_offset,
         );
     }
 }

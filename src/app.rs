@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+
 use bevy::animation::AnimationPlugin;
 use bevy::app::App;
 use bevy::asset::{AssetPlugin, Assets};
@@ -11,8 +13,11 @@ use bevy::prelude::*;
 
 use crate::render::CustomRendererPlugin;
 use crate::simulation::BlimpSimulationPlugin;
+use crate::AsyncSyncBridge;
 
-pub fn get_app() -> App {
+pub fn get_app(as_bridge_rx: tokio::sync::oneshot::Receiver<AsyncSyncBridge>) -> App {
+    let as_bridge = as_bridge_rx.blocking_recv().unwrap();
+
     let mut app = App::new();
     app.add_plugins((
         bevy::app::PanicHandlerPlugin,
@@ -54,7 +59,9 @@ pub fn get_app() -> App {
     .register_type::<bevy::core::Name>()
     .insert_resource(Events::<bevy::window::WindowResized>::default())
     .add_plugins(CustomRendererPlugin {})
-    .add_plugins(BlimpSimulationPlugin {});
+    .add_plugins(BlimpSimulationPlugin {
+        motors_servos_rx: Mutex::new(Some(as_bridge.motors_servos_rx)),
+    });
 
     app
 }

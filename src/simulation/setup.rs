@@ -9,6 +9,7 @@ use bevy::prelude::{
 };
 
 use crate::simulation::physics::RigidBody;
+use crate::simulation::BlimpComponent;
 
 pub fn setup(
     mut cmds: Commands,
@@ -36,6 +37,7 @@ pub fn setup(
         // MeshMaterial3d(blimp_material),
         SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("blimp.glb"))),
         Transform::from_xyz(blimp_pos.x, blimp_pos.y, blimp_pos.z),
+        BlimpComponent,
     ));
 
     //Spawn light
