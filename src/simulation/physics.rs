@@ -49,11 +49,16 @@ pub fn apply_gravity(mut query: Query<&mut RigidBody>, time: Res<Time>) {
 pub fn blimp_drive(mut query: Query<&mut RigidBody, With<BlimpComponent>>, time: Res<Time>) {
     for mut body in query.iter_mut() {
         let pos = body.body.pos.clone();
-        let pos_with_offset = pos + &(&body.body.rot_mat * &nalgebra::Vector3::new(2.0, 0.0, 0.0));
-        body.body.apply_force_at(
-            nalgebra::Vector3::new(0.0, 0.0, 0.1),
-            time.delta_secs(),
-            pos_with_offset,
-        );
+        for i in 0..4 {
+            let motor_pos_rel = nalgebra::Vector3::new(
+                if i % 2 == 0 { -2.0 } else { 2.0 },
+                0.0,
+                if i < 2 { 3.0 } else { -3.0 },
+            );
+            let pos_with_offset = pos + &(&body.body.rot_mat * &motor_pos_rel);
+            let force = body.body.rot_mat * nalgebra::Vector3::new(0.0, 0.0, 1.0);
+            body.body
+                .apply_force_at(force, time.delta_secs(), pos_with_offset);
+        }
     }
 }

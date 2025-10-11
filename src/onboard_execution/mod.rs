@@ -48,7 +48,7 @@ pub async fn start_onboard() -> (
                             MessageB2G::ForwardEvent(blimp_event) => {}
                             MessageB2G::BlimpState(blimp_state) => {}
                         }
-                        messages_b2g_tx.send(msg.as_ref().clone()).unwrap();
+                        _ = messages_b2g_tx.send(msg.as_ref().clone());
                     }
                     BlimpAction::SetServo { servo, location } => {
                         motors_servos_tx.send_modify(move |prev| {
