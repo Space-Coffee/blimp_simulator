@@ -3,6 +3,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use tokio;
+use tokio::sync::{broadcast, mpsc, watch};
 
 use blimp_onboard_software::obsw_algo::{
     BlimpAction, BlimpEvent, BlimpMainAlgo, BlimpState, MessageB2G, MessageG2B, SensorType,
@@ -18,18 +19,18 @@ pub enum OnboardSimEvent {
 }
 
 pub async fn start_onboard() -> (
-    tokio::sync::mpsc::Sender<MessageG2B>,
-    tokio::sync::broadcast::Sender<MessageB2G>,
-    // tokio::sync::broadcast::Sender<OnboardSimEvent>,
-    tokio::sync::watch::Receiver<([f32; 4], [f32; 12])>,
-    tokio::sync::mpsc::Sender<(SensorType, f64)>,
+    mpsc::Sender<MessageG2B>,
+    broadcast::Sender<MessageB2G>,
+    // broadcast::Sender<OnboardSimEvent>,
+    watch::Receiver<([f32; 4], [f32; 12])>,
+    mpsc::Sender<(SensorType, f64)>,
 ) {
-    let (messages_g2b_tx, mut messages_g2b_rx) = tokio::sync::mpsc::channel::<MessageG2B>(64);
-    let (messages_b2g_tx, _) = tokio::sync::broadcast::channel::<MessageB2G>(64);
-    // let (events_tx, _) = tokio::sync::broadcast::channel::<OnboardSimEvent>(64);
+    let (messages_g2b_tx, mut messages_g2b_rx) = mpsc::channel::<MessageG2B>(64);
+    let (messages_b2g_tx, _) = broadcast::channel::<MessageB2G>(64);
+    // let (events_tx, _) = broadcast::channel::<OnboardSimEvent>(64);
     let (motors_servos_tx, motors_servos_rx) =
-        tokio::sync::watch::channel::<([f32; 4], [f32; 12])>(([0.0; 4], [0.0; 12]));
-    let (sensors_tx, mut sensors_rx) = tokio::sync::mpsc::channel::<(SensorType, f64)>(64);
+        watch::channel::<([f32; 4], [f32; 12])>(([0.0; 4], [0.0; 12]));
+    let (sensors_tx, mut sensors_rx) = mpsc::channel::<(SensorType, f64)>(64);
 
     let action_callback: Arc<
         dyn Fn(BlimpAction) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
@@ -94,6 +95,8 @@ pub async fn start_onboard() -> (
                         .clone()
                         .handle_event(BlimpEvent::GetMsg(msg))
                         .await;
+                } else {
+                    break;
                 }
             }
         });
@@ -108,6 +111,8 @@ pub async fn start_onboard() -> (
                     .clone()
                     .handle_event(BlimpEvent::SensorDataF64(data.0, data.1))
                     .await;
+            } else {
+                break;
             }
         }
     });

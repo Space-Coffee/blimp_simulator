@@ -27,7 +27,7 @@ pub fn setup(
             body: physsim::RigidBody {
                 pos: blimp_pos,
                 lin_vel: nalgebra::Vector3::zeros(),
-                rot_mat: nalgebra::Matrix3::new(0.0, 0.0, 1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0),
+                rot_mat: nalgebra::Matrix3::new(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
                 ang_mom: nalgebra::Vector3::zeros(),
                 inv_ine: nalgebra::Matrix3::new(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
                 mass: 1.0,

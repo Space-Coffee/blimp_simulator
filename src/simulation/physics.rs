@@ -73,14 +73,14 @@ pub fn blimp_drive(
                 )
                 * nalgebra::Rotation3::from_euler_angles(
                     0.0,
-                    if i % 2 == 0 { 1.0 } else { -1.0 }
+                    if i % 2 == 0 { -1.0 } else { 1.0 }
                         * motors_servos_state.1[2 * i + 1]
                         * std::f32::consts::PI
                         / 180.0,
                     0.0,
                 )
                 * nalgebra::Vector3::new(
-                    0.25 * if i % 2 == 0 { 1.0 } else { -1.0 } * motors_servos_state.0[i],
+                    0.25 * if i % 2 == 0 { -1.0 } else { 1.0 } * motors_servos_state.0[i],
                     0.0,
                     0.0,
                 );
