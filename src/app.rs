@@ -10,6 +10,7 @@ use bevy::math::Vec3;
 use bevy::pbr::{MeshMaterial3d, PointLight, StandardMaterial};
 use bevy::picking::DefaultPickingPlugins;
 use bevy::prelude::*;
+use nalgebra;
 use tokio::sync::{oneshot, watch};
 
 use crate::render::CustomRendererPlugin;
@@ -22,7 +23,8 @@ pub struct AsyncSyncBridgeRes(pub AsyncSyncBridge);
 #[derive(Resource)]
 pub struct SyncAsyncBridgeRes {
     pub pos_tx: watch::Sender<(f32, f32, f32)>,
-    pub rot_tx: watch::Sender<(f32, f32, f32)>,
+    // pub rot_tx: watch::Sender<(f32, f32, f32, f32, f32, f32, f32, f32, f32)>,
+    pub rot_tx: watch::Sender<nalgebra::Rotation3<f32>>,
 }
 
 pub fn get_app(
@@ -30,7 +32,7 @@ pub fn get_app(
     sa_bridge_tx: oneshot::Sender<SyncAsyncBridge>,
 ) -> App {
     let (pos_tx, pos_rx) = watch::channel((0.0, 0.0, 0.0));
-    let (rot_tx, rot_rx) = watch::channel((0.0, 0.0, 0.0));
+    let (rot_tx, rot_rx) = watch::channel(nalgebra::Rotation3::identity());
     let sa_bridge = SyncAsyncBridge { pos_rx, rot_rx };
     sa_bridge_tx
         .send(sa_bridge)

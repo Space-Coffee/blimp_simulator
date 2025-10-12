@@ -5,6 +5,7 @@ mod sensors_simulation;
 mod simulation;
 mod websocket;
 
+use nalgebra;
 use tokio;
 use tokio::sync::{oneshot, watch};
 
@@ -20,7 +21,8 @@ struct AsyncSyncBridge {
 
 struct SyncAsyncBridge {
     pub pos_rx: watch::Receiver<(f32, f32, f32)>,
-    pub rot_rx: watch::Receiver<(f32, f32, f32)>,
+    // pub rot_rx: watch::Receiver<(f32, f32, f32)>,
+    pub rot_rx: watch::Receiver<nalgebra::Rotation3<f32>>,
 }
 
 fn main() {

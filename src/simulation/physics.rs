@@ -99,4 +99,22 @@ fn pass_blimp_sim_data(
         .pos_tx
         .send((body.body.pos.x, body.body.pos.y, body.body.pos.z))
         .unwrap();
+    // sa_bridge
+    //     .rot_tx
+    //     .send((
+    //         *body.body.rot_mat.get((0, 0)).unwrap(),
+    //         *body.body.rot_mat.get((0, 1)).unwrap(),
+    //         *body.body.rot_mat.get((0, 2)).unwrap(),
+    //         *body.body.rot_mat.get((1, 0)).unwrap(),
+    //         *body.body.rot_mat.get((1, 1)).unwrap(),
+    //         *body.body.rot_mat.get((1, 2)).unwrap(),
+    //         *body.body.rot_mat.get((2, 0)).unwrap(),
+    //         *body.body.rot_mat.get((2, 1)).unwrap(),
+    //         *body.body.rot_mat.get((2, 2)).unwrap(),
+    //     ))
+    //     .unwrap();
+    sa_bridge
+        .rot_tx
+        .send(nalgebra::Rotation3::from_matrix(&body.body.rot_mat))
+        .unwrap();
 }
