@@ -19,8 +19,11 @@ pub async fn start_sensors(
                 .await
                 .unwrap();
 
-            let grav_acc: nalgebra::Vector3<f32> =
-                rot_rx.borrow().inverse() * nalgebra::Vector3::<f32>::new(0.0, -9.81, 0.0);
+            let acc_transform =
+                nalgebra::Matrix3::<f32>::new(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0);
+            let grav_acc: nalgebra::Vector3<f32> = acc_transform
+                * rot_rx.borrow().inverse()
+                * nalgebra::Vector3::<f32>::new(0.0, 9.81, 0.0);
             sensors_tx
                 .send((SensorType::AccelerometerX, grav_acc.x as f64))
                 .await
