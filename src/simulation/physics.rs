@@ -1,14 +1,16 @@
-use std::f64::consts::PI;
 use bevy::prelude::{
     App, Component, FixedUpdate, IntoSystemConfigs, Mat3, Plugin, Quat, Query, Res, Time,
     Transform, Vec3, With,
 };
 use nalgebra;
+use std::f64::consts::PI;
 
 use crate::app::{AsyncSyncBridgeRes, SyncAsyncBridgeRes};
-use crate::simulation::BlimpComponent;
-use crate::simulation::constants::{AIR_MOLAR_MASS, BASE_TEMPERATURE, GAS_CONSTANT, GRAVITATIONAL_ACCELERATION};
+use crate::simulation::constants::{
+    AIR_MOLAR_MASS, BASE_TEMPERATURE, GAS_CONSTANT, GRAVITATIONAL_ACCELERATION,
+};
 use crate::simulation::util::pressure_at;
+use crate::simulation::BlimpComponent;
 
 pub struct PhysicsPlugin;
 
@@ -55,9 +57,10 @@ pub fn apply_gravity(mut query: Query<&mut RigidBody>, time: Res<Time>) {
 pub fn apply_buoyancy(mut query: Query<&mut RigidBody>, time: Res<Time>) {
     for mut body in query.iter_mut() {
         let pos = body.body.pos.clone();
-        let air_density = pressure_at(pos.y as f64) * AIR_MOLAR_MASS / GAS_CONSTANT / BASE_TEMPERATURE;
-        let size = nalgebra::Vector3::new(0.5, 0.5, 0.7602);
-        let volume: f64 = 4.0/3.0 * PI * size.x * size.y * size.z;
+        let air_density =
+            pressure_at(pos.y as f64) * AIR_MOLAR_MASS / GAS_CONSTANT / BASE_TEMPERATURE;
+        let size = nalgebra::Vector3::new(0.5, 0.5, 0.7978);
+        let volume: f64 = 4.0 / 3.0 * PI * size.x * size.y * size.z;
 
         let buoyancy = air_density * volume * GRAVITATIONAL_ACCELERATION;
 
