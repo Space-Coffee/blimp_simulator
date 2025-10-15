@@ -11,3 +11,13 @@ serde = "1.0.215"
 postcard = { version = "1.0.10", features = ["use-std"] }
 futures-util = "0.3.31"
 serde_json = "1.0.132"
+bevy = "0.15.1"
+bevy_headless_render = "0.2.0"
+physsim = { git = "https://github.com/TK-A369/physsim", branch = "develop" }
+nalgebra = "0.33.2"
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev]
+opt-level = 1

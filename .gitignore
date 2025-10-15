@@ -1,2 +1,5 @@
-/target
+target/
 .idea
+
+# Blender's backup files
+assets/*.blend1
