@@ -1,3 +1,4 @@
+use std::f64::consts::PI;
 use bevy::prelude::{
     App, Component, FixedUpdate, IntoSystemConfigs, Mat3, Plugin, Quat, Query, Res, Time,
     Transform, Vec3, With,
@@ -6,6 +7,8 @@ use nalgebra;
 
 use crate::app::{AsyncSyncBridgeRes, SyncAsyncBridgeRes};
 use crate::simulation::BlimpComponent;
+use crate::simulation::constants::{AIR_MOLAR_MASS, BASE_TEMPERATURE, GAS_CONSTANT, GRAVITATIONAL_ACCELERATION};
+use crate::simulation::util::pressure_at;
 
 pub struct PhysicsPlugin;
 
@@ -13,6 +16,7 @@ impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(FixedUpdate, (tick_rigid_body, sync_transform).chain());
         app.add_systems(FixedUpdate, apply_gravity);
+        app.add_systems(FixedUpdate, apply_buoyancy);
         app.add_systems(FixedUpdate, blimp_drive);
         app.add_systems(FixedUpdate, pass_blimp_sim_data);
     }
@@ -39,13 +43,32 @@ pub fn tick_rigid_body(mut query: Query<&mut RigidBody>, time: Res<Time>) {
 pub fn apply_gravity(mut query: Query<&mut RigidBody>, time: Res<Time>) {
     for mut body in query.iter_mut() {
         let pos = body.body.pos.clone();
+        let mass = body.body.mass.clone();
         body.body.apply_force_at(
-            nalgebra::Vector3::new(0.0, -0.001, 0.0),
+            nalgebra::Vector3::new(0.0, -GRAVITATIONAL_ACCELERATION as f32 * mass, 0.0),
             time.delta_secs(),
             pos,
         );
     }
 }
+
+pub fn apply_buoyancy(mut query: Query<&mut RigidBody>, time: Res<Time>) {
+    for mut body in query.iter_mut() {
+        let pos = body.body.pos.clone();
+        let air_density = pressure_at(pos.y as f64) * AIR_MOLAR_MASS / GAS_CONSTANT / BASE_TEMPERATURE;
+        let size = nalgebra::Vector3::new(0.5, 0.5, 0.7602);
+        let volume: f64 = 4.0/3.0 * PI * size.x * size.y * size.z;
+
+        let buoyancy = air_density * volume * GRAVITATIONAL_ACCELERATION;
+
+        body.body.apply_force_at(
+            nalgebra::Vector3::new(0.0, buoyancy as f32, 0.0),
+            time.delta_secs(),
+            pos,
+        );
+    }
+}
+
 pub fn blimp_drive(
     mut query: Query<&mut RigidBody, With<BlimpComponent>>,
     time: Res<Time>,
@@ -85,7 +108,7 @@ pub fn blimp_drive(
                     0.0,
                 );
             body.body
-                .apply_force_at(force, time.delta_secs(), pos_with_offset);
+                .apply_force_at(force * 0.1, time.delta_secs(), pos_with_offset);
         }
     }
 }

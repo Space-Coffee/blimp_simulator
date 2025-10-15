@@ -1,6 +1,7 @@
 use tokio::sync::{mpsc, watch};
 
 use blimp_onboard_software::obsw_algo::SensorType;
+use crate::simulation::util::pressure_at;
 
 pub async fn start_sensors(
     pos_rx: watch::Receiver<(f32, f32, f32)>,
@@ -9,11 +10,7 @@ pub async fn start_sensors(
 ) {
     tokio::spawn(async move {
         loop {
-            let pressure: f64 = 101325.0f64
-                * (-9.81f64 * 28.9644 * (pos_rx.borrow().1 as f64 + 200.0 - 0.0)
-                    / 8.31e3
-                    / (273.15 + 15.0))
-                    .exp();
+            let pressure = pressure_at(pos_rx.borrow().1 as f64);
             sensors_tx
                 .send((SensorType::Barometer, pressure))
                 .await
