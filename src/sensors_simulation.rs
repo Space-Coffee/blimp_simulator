@@ -27,7 +27,6 @@ pub async fn start_sensors(
             let forward = rot_rx.borrow().clone() * Vector3::z();
             let magnetometer_angle = PI - forward.x.atan2(forward.z);
 
-            println!("{:?}", magnetometer_angle);
             sensors_tx
                 .send((SensorType::AccelerometerX, grav_acc.x as f64))
                 .await
