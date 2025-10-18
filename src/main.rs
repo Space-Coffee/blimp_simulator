@@ -55,7 +55,7 @@ async fn async_main(
     start_sensors(sa_bridge.pos_rx, sa_bridge.rot_rx, sensors_tx).await;
 
     // WebSocket server for visualizations, etc.
-    let mut ws_server = BlimpGroundWebsocketServer::new("10.10.30.142:8765");
+    let mut ws_server = BlimpGroundWebsocketServer::new("127.0.0.1:8765");
     ws_server.bind().await.expect("Failed to bind WS server");
     let server_task = tokio::spawn(async move {
         ws_server

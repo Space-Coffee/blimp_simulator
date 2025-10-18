@@ -3,8 +3,9 @@ use bevy::prelude::{
     Transform, Vec3, With,
 };
 use nalgebra;
-use std::f64::consts::PI;
 use nalgebra::{Matrix3, Rotation3, Vector3};
+use std::f64::consts::PI;
+
 use crate::app::{AsyncSyncBridgeRes, SyncAsyncBridgeRes};
 use crate::simulation::constants::{
     AIR_MOLAR_MASS, BASE_TEMPERATURE, GAS_CONSTANT, GRAVITATIONAL_ACCELERATION,
@@ -48,7 +49,7 @@ pub fn apply_gravity(mut query: Query<&mut RigidBody>, time: Res<Time>) {
         let pos = body.body.pos.clone();
         let mass = body.body.mass.clone();
         let rot_mat = body.body.rot_mat.clone();
-        let mass_center_displacement = Vector3::new(0.0, -3.0, 0.0);
+        let mass_center_displacement = Vector3::new(0.0, -0.5, 0.0);
         body.body.apply_force_at(
             Vector3::new(0.0, -GRAVITATIONAL_ACCELERATION as f32 * mass, 0.0),
             time.delta_secs(),
@@ -119,15 +120,15 @@ pub fn blimp_drive(
     }
 }
 
-pub fn blimp_drag(
-    mut query: Query<&mut RigidBody>,
-    time: Res<Time>,
-) {
+pub fn blimp_drag(mut query: Query<&mut RigidBody>, time: Res<Time>) {
     const LINEAR_DRAG_COEFFICIENT: f32 = 0.1;
     const ANGULAR_DRAG_COEFFICIENT: f32 = 0.25;
     for mut body in query.iter_mut() {
         let linear_drag_force = -body.body.lin_vel.scale(LINEAR_DRAG_COEFFICIENT);
-        body.body.apply_force_at(linear_drag_force, time.delta_secs(), Vector3::zeros());
+        let drag_application_pos =
+            body.body.pos + body.body.rot_mat * nalgebra::Vector3::new(0.0, 0.5, 0.0);
+        body.body
+            .apply_force_at(linear_drag_force, time.delta_secs(), drag_application_pos);
         body.body.ang_mom *= 1.0 - ANGULAR_DRAG_COEFFICIENT * time.delta_secs()
     }
 }

@@ -1,9 +1,9 @@
 use std::f32::consts::PI;
 use tokio::sync::{mpsc, watch};
 
+use crate::simulation::util::pressure_at;
 use blimp_onboard_software::obsw_algo::SensorType;
 use nalgebra::Vector3;
-use crate::simulation::util::pressure_at;
 
 pub async fn start_sensors(
     pos_rx: watch::Receiver<(f32, f32, f32)>,
