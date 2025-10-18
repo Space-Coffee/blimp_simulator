@@ -1,6 +1,8 @@
+use std::f32::consts::PI;
 use tokio::sync::{mpsc, watch};
 
 use blimp_onboard_software::obsw_algo::SensorType;
+use nalgebra::Vector3;
 use crate::simulation::util::pressure_at;
 
 pub async fn start_sensors(
@@ -21,6 +23,11 @@ pub async fn start_sensors(
             let grav_acc: nalgebra::Vector3<f32> = acc_transform
                 * rot_rx.borrow().inverse()
                 * nalgebra::Vector3::<f32>::new(0.0, 9.81, 0.0);
+
+            let forward = rot_rx.borrow().clone() * Vector3::z();
+            let magnetometer_angle = PI - forward.x.atan2(forward.z);
+
+            println!("{:?}", magnetometer_angle);
             sensors_tx
                 .send((SensorType::AccelerometerX, grav_acc.x as f64))
                 .await
@@ -31,6 +38,10 @@ pub async fn start_sensors(
                 .unwrap();
             sensors_tx
                 .send((SensorType::AccelerometerZ, grav_acc.z as f64))
+                .await
+                .unwrap();
+            sensors_tx
+                .send((SensorType::MagnetometerHeading, magnetometer_angle as f64))
                 .await
                 .unwrap();
 
