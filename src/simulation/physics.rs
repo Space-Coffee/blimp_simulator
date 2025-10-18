@@ -21,6 +21,7 @@ impl Plugin for PhysicsPlugin {
         app.add_systems(FixedUpdate, apply_buoyancy);
         app.add_systems(FixedUpdate, blimp_drive);
         app.add_systems(FixedUpdate, pass_blimp_sim_data);
+        app.add_systems(FixedUpdate, blimp_drag.after(apply_gravity));
     }
 }
 
@@ -115,6 +116,19 @@ pub fn blimp_drive(
             body.body
                 .apply_force_at(force, time.delta_secs(), pos_with_offset);
         }
+    }
+}
+
+pub fn blimp_drag(
+    mut query: Query<&mut RigidBody>,
+    time: Res<Time>,
+) {
+    const LINEAR_DRAG_COEFFICIENT: f32 = 0.1;
+    const ANGULAR_DRAG_COEFFICIENT: f32 = 0.25;
+    for mut body in query.iter_mut() {
+        let linear_drag_force = -body.body.lin_vel.scale(LINEAR_DRAG_COEFFICIENT);
+        body.body.apply_force_at(linear_drag_force, time.delta_secs(), Vector3::zeros());
+        body.body.ang_mom *= 1.0 - ANGULAR_DRAG_COEFFICIENT * time.delta_secs()
     }
 }
 
