@@ -4,7 +4,7 @@ use bevy::prelude::{
 };
 use nalgebra;
 use std::f64::consts::PI;
-
+use nalgebra::{Matrix3, Rotation3, Vector3};
 use crate::app::{AsyncSyncBridgeRes, SyncAsyncBridgeRes};
 use crate::simulation::constants::{
     AIR_MOLAR_MASS, BASE_TEMPERATURE, GAS_CONSTANT, GRAVITATIONAL_ACCELERATION,
@@ -46,10 +46,12 @@ pub fn apply_gravity(mut query: Query<&mut RigidBody>, time: Res<Time>) {
     for mut body in query.iter_mut() {
         let pos = body.body.pos.clone();
         let mass = body.body.mass.clone();
+        let rot_mat = body.body.rot_mat.clone();
+        let mass_center_displacement = Vector3::new(0.0, -3.0, 0.0);
         body.body.apply_force_at(
-            nalgebra::Vector3::new(0.0, -GRAVITATIONAL_ACCELERATION as f32 * mass, 0.0),
+            Vector3::new(0.0, -GRAVITATIONAL_ACCELERATION as f32 * mass, 0.0),
             time.delta_secs(),
-            pos,
+            pos + Rotation3::from_matrix_unchecked(rot_mat) * mass_center_displacement,
         );
     }
 }

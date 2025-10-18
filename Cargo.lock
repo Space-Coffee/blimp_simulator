@@ -3629,7 +3629,6 @@ dependencies = [
 [[package]]
 name = "physsim"
 version = "0.1.0"
-source = "git+https://github.com/TK-A369/physsim?branch=develop#e111cac72a27058b3275d55e45d30b5668eb0554"
 dependencies = [
  "dashu",
  "nalgebra",
@@ -5720,3 +5719,7 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[patch.unused]]
+name = "blimp_comm"
+version = "0.1.0"
