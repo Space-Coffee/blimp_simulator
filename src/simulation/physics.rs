@@ -106,12 +106,12 @@ pub fn blimp_drive(
                     0.0,
                 )
                 * nalgebra::Vector3::new(
-                    0.25 * if i % 2 == 0 { -1.0 } else { 1.0 } * motors_servos_state.0[i],
+                    0.2 * if i % 2 == 0 { -1.0 } else { 1.0 } * motors_servos_state.0[i],
                     0.0,
                     0.0,
                 );
             body.body
-                .apply_force_at(force * 0.1, time.delta_secs(), pos_with_offset);
+                .apply_force_at(force, time.delta_secs(), pos_with_offset);
         }
     }
 }
