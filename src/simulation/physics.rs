@@ -34,7 +34,23 @@ pub struct RigidBody {
 pub fn sync_transform(mut query: Query<(&mut Transform, &RigidBody)>) {
     for (mut transform, rb) in query.iter_mut() {
         transform.translation = Vec3::from_array(rb.body.pos.into());
-        transform.rotation = Quat::from_mat3(&Mat3::from_cols_array_2d(&rb.body.rot_mat.into()));
+        // The model gets loaded rotated by 180deg around Y axis
+        // I'm not sure if this can be fixed in the glTF model loading instead
+        transform.rotation = Quat::from_mat3(&Mat3::from_cols_array_2d(
+            &Into::<nalgebra::Matrix3<f32>>::into(
+                &rb.body.rot_mat
+                    * nalgebra::Rotation3::<f32>::from_axis_angle(
+                        &nalgebra::UnitVector3::<f32>::new_unchecked(
+                            nalgebra::Vector3::<f32>::new(0.0, 1.0, 0.0),
+                        ),
+                        std::f32::consts::PI,
+                    )
+                    .matrix(),
+            )
+            .into_owned()
+            .data
+            .0,
+        ));
     }
 }
 
