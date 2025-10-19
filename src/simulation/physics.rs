@@ -55,6 +55,14 @@ pub fn apply_gravity(mut query: Query<&mut RigidBody>, time: Res<Time>) {
             time.delta_secs(),
             pos + Rotation3::from_matrix_unchecked(rot_mat) * mass_center_displacement,
         );
+
+        // Prevent from falling under the floor
+        if body.body.pos.y <= 0.0 {
+            body.body.pos.y = 0.05;
+            body.body
+                .lin_vel
+                .scale_mut(0.5f32.powf(time.delta_secs() / 0.5));
+        }
     }
 }
 

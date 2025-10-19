@@ -51,6 +51,7 @@ pub fn setup(
         Transform::from_xyz(10.0, 100.0, 5.0)
             .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
     ));
+
     // Floor
     let floor_mesh = meshes.add(Plane3d::new(
         Vec3::new(0.0, 1.0, 0.0),
@@ -60,11 +61,11 @@ pub fn setup(
     cmds.spawn((
         Mesh3d(floor_mesh),
         MeshMaterial3d(floor_material),
-        Transform::from_xyz(0.0, -10.0, 0.0),
+        Transform::from_xyz(0.0, 0.0, 0.0),
     ));
 
     // Camera
     let mut transform = camera_transform.get_single_mut().expect("Camera not found");
-    *transform = Transform::from_xyz(8.0, 16.0, 32.0)
-        .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+    *transform = Transform::from_xyz(16.0, 32.0, 64.0)
+        .looking_at(Vec3::new(0.0, 8.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
 }
