@@ -1,42 +1,58 @@
+use crate::render::camera::{GroundCamera, OnboardCamera};
 use crate::simulation::setup;
 use bevy::prelude::*;
 use std::io::Write;
-use crate::render::camera::{GroundCamera, OnboardCamera};
 
 #[derive(Resource)]
 struct FfmpegProcess(std::process::Child);
 
 fn render_ffmpeg(
-    dest: Query<&bevy_headless_render::components::HeadlessRenderDestination>,
+    dest: Query<(
+        &bevy_headless_render::components::HeadlessRenderDestination,
+        &Camera,
+    )>,
     ffmpeg: ResMut<FfmpegProcess>,
 ) {
     let mut ffmpeg_stdin = ffmpeg.0.stdin.as_ref().expect("Failed to get ffmpeg stdin");
-    let dest = dest.single().0.clone();
-    let dest = dest.lock().unwrap();
+    for dest in dest.iter() {
+        if dest.1.is_active {
+            let dest = dest.0 .0.clone();
+            let dest = dest.lock().unwrap();
 
-    ffmpeg_stdin
-        .write_all(&dest.data)
-        .expect("Failed to send video data to ffmpeg");
+            ffmpeg_stdin
+                .write_all(&dest.data)
+                .expect("Failed to send video data to ffmpeg");
+            break;
+        }
+    }
 }
 
 fn render_ffmpeg_debug(
-    dest: Query<&bevy_headless_render::components::HeadlessRenderDestination>,
+    dest: Query<(
+        &bevy_headless_render::components::HeadlessRenderDestination,
+        &Camera,
+    )>,
     ffmpeg: ResMut<FfmpegProcess>,
 ) {
     let mut ffmpeg_stdin = ffmpeg.0.stdin.as_ref().expect("Failed to get ffmpeg stdin");
-    let dest = dest.single().0.clone();
-    let dest = dest.lock().unwrap();
 
-    let mut fake_data = Vec::new();
-    fake_data.resize(dest.data.len(), 0);
-    let mut counter: u8 = 0;
-    for b in &mut fake_data {
-        *b = counter;
-        counter = counter.wrapping_add(1);
+    for dest in dest.iter() {
+        if dest.1.is_active {
+            let dest = dest.0 .0.clone();
+            let dest = dest.lock().unwrap();
+
+            let mut fake_data = Vec::new();
+            fake_data.resize(dest.data.len(), 0);
+            let mut counter: u8 = 0;
+            for b in &mut fake_data {
+                *b = counter;
+                counter = counter.wrapping_add(1);
+            }
+            ffmpeg_stdin
+                .write_all(&fake_data)
+                .expect("Failed to send video data to ffmpeg");
+        }
     }
-    ffmpeg_stdin
-        .write_all(&fake_data)
-        .expect("Failed to send video data to ffmpeg");
 }
 
 fn setup_headless_render(mut cmds: Commands, asset_server: ResMut<AssetServer>) {
@@ -77,7 +93,7 @@ fn setup_headless_render(mut cmds: Commands, asset_server: ResMut<AssetServer>) 
             ..default()
         },
         Transform::default(),
-        GroundCamera
+        GroundCamera,
     ));
     cmds.spawn((
         bevy_headless_render::components::HeadlessRenderSource::new(
@@ -91,7 +107,7 @@ fn setup_headless_render(mut cmds: Commands, asset_server: ResMut<AssetServer>) 
             ..default()
         },
         Transform::default(),
-        OnboardCamera
+        OnboardCamera,
     ));
 }
 pub fn apply_headless_config(mut app: &mut App, ffplay: bool, debug: bool) {
