@@ -7,7 +7,7 @@ mod websocket;
 
 use nalgebra;
 use tokio;
-use tokio::sync::{oneshot, watch};
+use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::app::get_app;
 use crate::onboard_execution::start_onboard;
@@ -17,6 +17,7 @@ use blimp_ground_ws_interface::BlimpGroundWebsocketServer;
 
 struct AsyncSyncBridge {
     pub motors_servos_rx: watch::Receiver<([f32; 4], [f32; 12])>,
+    pub camera_index_rx: watch::Receiver<u8>
 }
 
 struct SyncAsyncBridge {
@@ -45,9 +46,11 @@ async fn async_main(
 ) {
     let (messages_g2b_tx, messages_b2g_tx, /*events_tx,*/ motors_servos_rx, sensors_tx) =
         start_onboard().await;
-
+    let (camera_switch_tx, camera_switch_rx) = watch::channel::<u8>(0);
+    camera_switch_tx.send(0);
+    
     as_bridge_tx
-        .send(AsyncSyncBridge { motors_servos_rx })
+        .send(AsyncSyncBridge { motors_servos_rx, camera_index_rx: camera_switch_rx })
         .map_err(|_| "Couldn't send data thourgh async-sync bridge")
         .unwrap();
     let sa_bridge = sa_bridge_rx.await.unwrap();
@@ -55,7 +58,7 @@ async fn async_main(
     start_sensors(sa_bridge.pos_rx, sa_bridge.rot_rx, sensors_tx).await;
 
     // WebSocket server for visualizations, etc.
-    let mut ws_server = BlimpGroundWebsocketServer::new("127.0.0.1:8765");
+    let mut ws_server = BlimpGroundWebsocketServer::new("localhost:8765");
     ws_server.bind().await.expect("Failed to bind WS server");
     let server_task = tokio::spawn(async move {
         ws_server

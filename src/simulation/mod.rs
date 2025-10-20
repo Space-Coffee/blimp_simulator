@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use bevy::app::{App, Plugin, Startup};
 use bevy::prelude::*;
-use crate::simulation::camera::camera_follow;
+use crate::simulation::camera::{camera_follow, camera_switch};
 use crate::simulation::physics::PhysicsPlugin;
 
 pub struct BlimpSimulationPlugin;
@@ -18,6 +18,7 @@ impl Plugin for BlimpSimulationPlugin {
         app.add_systems(Startup, setup::setup);
         app.add_plugins(PhysicsPlugin);
         app.add_systems(Update, camera_follow);
+        app.add_systems(Update, camera_switch);
     }
 }
 
