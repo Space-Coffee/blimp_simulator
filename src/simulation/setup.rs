@@ -15,7 +15,7 @@ fn spawn_tree(cmds: &mut Commands, meshes: &mut ResMut<Assets<Mesh>>, materials:
     let leaves_radius = size / 3.0;
     // Trunk
     cmds.spawn((
-        Mesh3d(meshes.add(Cuboid::new(trunk_thickness, trunk_length, trunk_thickness))),
+        Mesh3d(meshes.add(Cuboid::new(trunk_thickness, trunk_length + leaves_radius / 2.0, trunk_thickness))),
         MeshMaterial3d(materials.add(Color::srgb(0.55, 0.27, 0.07))),
         Transform::from_translation(root + Vec3::new(0.0, trunk_length / 2.0, 0.0))
     ));
