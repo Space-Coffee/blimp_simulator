@@ -1,6 +1,7 @@
 use crate::simulation::setup;
 use bevy::prelude::*;
 use std::io::Write;
+use crate::render::camera::{GroundCamera, OnboardCamera};
 
 #[derive(Resource)]
 struct FfmpegProcess(std::process::Child);
@@ -71,10 +72,26 @@ fn setup_headless_render(mut cmds: Commands, asset_server: ResMut<AssetServer>) 
         ),
         Camera3d::default(),
         Camera {
-            target: image_handle.into(),
+            target: image_handle.clone().into(),
+            is_active: false,
             ..default()
         },
         Transform::default(),
+        GroundCamera
+    ));
+    cmds.spawn((
+        bevy_headless_render::components::HeadlessRenderSource::new(
+            &asset_server,
+            image_handle.clone(),
+        ),
+        Camera3d::default(),
+        Camera {
+            target: image_handle.clone().into(),
+            is_active: true,
+            ..default()
+        },
+        Transform::default(),
+        OnboardCamera
     ));
 }
 pub fn apply_headless_config(mut app: &mut App, ffplay: bool, debug: bool) {

@@ -7,7 +7,7 @@ use bevy::prelude::{
     default, Camera, Commands, Mesh, Mesh3d, Plane3d, Query, Res, ResMut, SceneRoot, Transform,
     With,
 };
-
+use crate::render::camera::GroundCamera;
 use crate::simulation::physics::RigidBody;
 use crate::simulation::BlimpComponent;
 
@@ -15,7 +15,7 @@ pub fn setup(
     mut cmds: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut camera_transform: Query<&mut Transform, With<Camera>>,
+    mut camera_transform: Query<&mut Transform, With<GroundCamera>>,
     asset_server: Res<AssetServer>,
 ) {
     // Spawn blimp

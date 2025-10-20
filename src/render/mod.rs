@@ -1,5 +1,6 @@
 mod headless;
 mod windowed;
+pub mod camera;
 
 use crate::render::headless::apply_headless_config;
 use crate::render::windowed::apply_windowed_config;
