@@ -15,6 +15,7 @@ bevy = "0.15.1"
 bevy_headless_render = "0.2.0"
 physsim = { git = "https://github.com/TK-A369/physsim", branch = "develop" }
 nalgebra = "0.33.2"
+rand = "0.9.2"
 
 [profile.dev.package."*"]
 opt-level = 3

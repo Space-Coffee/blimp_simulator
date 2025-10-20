@@ -1391,6 +1391,7 @@ dependencies = [
  "nalgebra",
  "physsim",
  "postcard",
+ "rand 0.9.2",
  "serde",
  "serde_json",
  "tokio",
