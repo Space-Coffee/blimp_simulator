@@ -17,7 +17,7 @@ use blimp_ground_ws_interface::BlimpGroundWebsocketServer;
 
 struct AsyncSyncBridge {
     pub motors_servos_rx: watch::Receiver<([f32; 4], [f32; 12])>,
-    pub camera_index_rx: watch::Receiver<u8>
+    pub camera_index_rx: watch::Receiver<u8>,
 }
 
 struct SyncAsyncBridge {
@@ -47,10 +47,13 @@ async fn async_main(
     let (messages_g2b_tx, messages_b2g_tx, /*events_tx,*/ motors_servos_rx, sensors_tx) =
         start_onboard().await;
     let (camera_switch_tx, camera_switch_rx) = watch::channel::<u8>(0);
-    camera_switch_tx.send(0);
-    
+    camera_switch_tx.send(0).unwrap();
+
     as_bridge_tx
-        .send(AsyncSyncBridge { motors_servos_rx, camera_index_rx: camera_switch_rx })
+        .send(AsyncSyncBridge {
+            motors_servos_rx,
+            camera_index_rx: camera_switch_rx,
+        })
         .map_err(|_| "Couldn't send data thourgh async-sync bridge")
         .unwrap();
     let sa_bridge = sa_bridge_rx.await.unwrap();
@@ -65,6 +68,7 @@ async fn async_main(
             .run(handle_ground_ws_connection(
                 messages_g2b_tx,
                 messages_b2g_tx,
+                camera_switch_tx,
             ))
             .await
             .expect("Error occurred while running WS server");

@@ -16,12 +16,14 @@ use blimp_onboard_software::obsw_algo::{MessageB2G, MessageG2B, SensorType};
 pub fn handle_ground_ws_connection(
     messages_g2b_tx: mpsc::Sender<MessageG2B>,
     messages_b2g_tx: broadcast::Sender<MessageB2G>,
+    camera_switch_tx: watch::Sender<u8>,
 ) -> impl Fn(
     BlimpGroundWebsocketStreamPair<tokio::net::TcpStream>,
 ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     move |stream_pair: BlimpGroundWebsocketStreamPair<tokio::net::TcpStream>| {
         let messages_g2b_tx = messages_g2b_tx.clone();
         let mut messages_b2g_rx = messages_b2g_tx.subscribe();
+        let camera_switch_tx = camera_switch_tx.clone();
         Box::pin(async move {
             let stream_pair = Arc::new(stream_pair);
 
@@ -96,7 +98,6 @@ pub fn handle_ground_ws_connection(
 
             loop {
                 if let Ok(ws_msg) = stream_pair.recv::<MessageV2G>().await {
-                    // TODO
                     match ws_msg {
                         MessageV2G::DeclareInterest(viz_interest) => {
                             interest_tx.send(viz_interest).unwrap();
@@ -106,6 +107,19 @@ pub fn handle_ground_ws_connection(
                                 .send(MessageG2B::Control(controls))
                                 .await
                                 .unwrap();
+                        }
+                        MessageV2G::CycleCamera => {
+                            // println!("Received cycle camera message");
+                            let prev_camera = camera_switch_tx.borrow().clone();
+                            // println!("Read previous camera");
+                            camera_switch_tx
+                                .send(match prev_camera {
+                                    0 => 1,
+                                    1 => 0,
+                                    _ => unreachable!(),
+                                })
+                                .unwrap();
+                            // println!("Cycled camera");
                         }
                     }
                 } else {
