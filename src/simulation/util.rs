@@ -1,0 +1,13 @@
+use crate::simulation::constants::{
+    AIR_MOLAR_MASS, BASE_ALTITUDE, BASE_PRESSURE, BASE_TEMPERATURE, GAS_CONSTANT,
+    GRAVITATIONAL_ACCELERATION,
+};
+
+pub fn pressure_at(height: f64) -> f64 {
+    BASE_PRESSURE
+        * (-GRAVITATIONAL_ACCELERATION * AIR_MOLAR_MASS * (BASE_ALTITUDE + height)
+            / GAS_CONSTANT
+            / BASE_TEMPERATURE)
+            .exp()
+}
+

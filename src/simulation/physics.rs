@@ -1,0 +1,188 @@
+use bevy::prelude::{
+    App, Component, FixedUpdate, IntoSystemConfigs, Mat3, Plugin, Quat, Query, Res, Time,
+    Transform, Vec3, With,
+};
+use nalgebra;
+use nalgebra::{Matrix3, Rotation3, Vector3};
+use std::f64::consts::PI;
+
+use crate::app::{AsyncSyncBridgeRes, SyncAsyncBridgeRes};
+use crate::simulation::constants::{
+    AIR_MOLAR_MASS, BASE_TEMPERATURE, GAS_CONSTANT, GRAVITATIONAL_ACCELERATION,
+};
+use crate::simulation::util::pressure_at;
+use crate::simulation::BlimpComponent;
+
+pub struct PhysicsPlugin;
+
+impl Plugin for PhysicsPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(FixedUpdate, (tick_rigid_body, sync_transform).chain());
+        app.add_systems(FixedUpdate, apply_gravity);
+        app.add_systems(FixedUpdate, apply_buoyancy);
+        app.add_systems(FixedUpdate, blimp_drive);
+        app.add_systems(FixedUpdate, pass_blimp_sim_data);
+        app.add_systems(FixedUpdate, blimp_drag.after(apply_gravity));
+    }
+}
+
+#[derive(Component)]
+pub struct RigidBody {
+    pub body: physsim::RigidBody<f32>,
+}
+
+pub fn sync_transform(mut query: Query<(&mut Transform, &RigidBody)>) {
+    for (mut transform, rb) in query.iter_mut() {
+        transform.translation = Vec3::from_array(rb.body.pos.into());
+        // The model gets loaded rotated by 180deg around Y axis
+        // I'm not sure if this can be fixed in the glTF model loading instead
+        transform.rotation = Quat::from_mat3(&Mat3::from_cols_array_2d(
+            &Into::<nalgebra::Matrix3<f32>>::into(
+                &rb.body.rot_mat
+                    * nalgebra::Rotation3::<f32>::from_axis_angle(
+                        &nalgebra::UnitVector3::<f32>::new_unchecked(
+                            nalgebra::Vector3::<f32>::new(0.0, 1.0, 0.0),
+                        ),
+                        std::f32::consts::PI,
+                    )
+                    .matrix(),
+            )
+            .into_owned()
+            .data
+            .0,
+        ));
+    }
+}
+
+pub fn tick_rigid_body(mut query: Query<&mut RigidBody>, time: Res<Time>) {
+    for mut body in query.iter_mut() {
+        body.body.step_sim(time.delta_secs());
+    }
+}
+
+pub fn apply_gravity(mut query: Query<&mut RigidBody>, time: Res<Time>) {
+    for mut body in query.iter_mut() {
+        let pos = body.body.pos.clone();
+        let mass = body.body.mass.clone();
+        let rot_mat = body.body.rot_mat.clone();
+        let mass_center_displacement = Vector3::new(0.0, -0.5, 0.0);
+        body.body.apply_force_at(
+            Vector3::new(0.0, -GRAVITATIONAL_ACCELERATION as f32 * mass, 0.0),
+            time.delta_secs(),
+            pos + Rotation3::from_matrix_unchecked(rot_mat) * mass_center_displacement,
+        );
+
+        // Prevent from falling under the floor
+        if body.body.pos.y <= 0.0 {
+            body.body.pos.y = 0.05;
+            body.body
+                .lin_vel
+                .scale_mut(0.5f32.powf(time.delta_secs() / 0.5));
+        }
+    }
+}
+
+pub fn apply_buoyancy(mut query: Query<&mut RigidBody>, time: Res<Time>) {
+    for mut body in query.iter_mut() {
+        let pos = body.body.pos.clone();
+        let air_density =
+            pressure_at(pos.y as f64) * AIR_MOLAR_MASS / GAS_CONSTANT / BASE_TEMPERATURE;
+        let size = nalgebra::Vector3::new(0.5, 0.5, 0.7978);
+        let volume: f64 = 4.0 / 3.0 * PI * size.x * size.y * size.z;
+
+        let buoyancy = air_density * volume * GRAVITATIONAL_ACCELERATION;
+
+        body.body.apply_force_at(
+            nalgebra::Vector3::new(0.0, buoyancy as f32, 0.0),
+            time.delta_secs(),
+            pos,
+        );
+    }
+}
+
+pub fn blimp_drive(
+    mut query: Query<&mut RigidBody, With<BlimpComponent>>,
+    time: Res<Time>,
+    as_bridge: Res<AsyncSyncBridgeRes>,
+) {
+    let motors_servos_state = as_bridge.as_ref().0.motors_servos_rx.borrow();
+    // We should probably use query.single_mut() instead
+    for mut body in query.iter_mut() {
+        let pos = body.body.pos.clone();
+        for i in 0..4 {
+            let motor_pos_rel = nalgebra::Vector3::new(
+                if i % 2 == 0 { -2.0 } else { 2.0 },
+                0.0,
+                if i < 2 { 3.0 } else { -3.0 },
+            );
+            let pos_with_offset = pos + &(&body.body.rot_mat * &motor_pos_rel);
+            let force = body.body.rot_mat
+                * nalgebra::Rotation3::from_euler_angles(
+                    (if i % 2 == 0 { 1.0 } else { -1.0 })
+                        * motors_servos_state.1[2 * i] /* .clamp(-90.0, 90.0) */
+                        * std::f32::consts::PI
+                        / 180.0,
+                    0.0,
+                    0.0,
+                )
+                * nalgebra::Rotation3::from_euler_angles(
+                    0.0,
+                    (if i % 2 == 0 { -1.0 } else { 1.0 })
+                        * motors_servos_state.1[2 * i + 1] /* .clamp(-90.0, 90.0) */
+                        * std::f32::consts::PI
+                        / 180.0,
+                    0.0,
+                )
+                * nalgebra::Vector3::new(
+                    0.2 * (if i % 2 == 0 { -1.0 } else { 1.0 })
+                        * motors_servos_state.0[i].clamp(-1.0, 1.0),
+                    0.0,
+                    0.0,
+                );
+            body.body
+                .apply_force_at(force, time.delta_secs(), pos_with_offset);
+        }
+    }
+}
+
+pub fn blimp_drag(mut query: Query<&mut RigidBody>, time: Res<Time>) {
+    const LINEAR_DRAG_COEFFICIENT: f32 = 0.1;
+    const ANGULAR_DRAG_COEFFICIENT: f32 = 0.25;
+    for mut body in query.iter_mut() {
+        let linear_drag_force = -body.body.lin_vel.scale(LINEAR_DRAG_COEFFICIENT);
+        let drag_application_pos =
+            body.body.pos + body.body.rot_mat * nalgebra::Vector3::new(0.0, 0.5, 0.0);
+        body.body
+            .apply_force_at(linear_drag_force, time.delta_secs(), drag_application_pos);
+        body.body.ang_mom *= 1.0 - ANGULAR_DRAG_COEFFICIENT * time.delta_secs()
+    }
+}
+
+fn pass_blimp_sim_data(
+    query: Query<&RigidBody, With<BlimpComponent>>,
+    sa_bridge: Res<SyncAsyncBridgeRes>,
+) {
+    let body = query.single();
+    sa_bridge
+        .pos_tx
+        .send((body.body.pos.x, body.body.pos.y, body.body.pos.z))
+        .unwrap();
+    // sa_bridge
+    //     .rot_tx
+    //     .send((
+    //         *body.body.rot_mat.get((0, 0)).unwrap(),
+    //         *body.body.rot_mat.get((0, 1)).unwrap(),
+    //         *body.body.rot_mat.get((0, 2)).unwrap(),
+    //         *body.body.rot_mat.get((1, 0)).unwrap(),
+    //         *body.body.rot_mat.get((1, 1)).unwrap(),
+    //         *body.body.rot_mat.get((1, 2)).unwrap(),
+    //         *body.body.rot_mat.get((2, 0)).unwrap(),
+    //         *body.body.rot_mat.get((2, 1)).unwrap(),
+    //         *body.body.rot_mat.get((2, 2)).unwrap(),
+    //     ))
+    //     .unwrap();
+    sa_bridge
+        .rot_tx
+        .send(nalgebra::Rotation3::from_matrix(&body.body.rot_mat))
+        .unwrap();
+}
